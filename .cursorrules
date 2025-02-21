@@ -1,0 +1,125 @@
+{
+    "project": {
+        "name": "Liv'In Paris",
+        "description": "Meal sharing service between neighbors in Paris city center",
+        "requirements": {
+            "registration": {
+                "required_fields": [
+                    "last name",
+                    "first name",
+                    "address",
+                    "phone",
+                    "email address"
+                ],
+                "user_types": [
+                    "cook",
+                    "client"
+                ],
+                "client_types": [
+                    "individual",
+                    "local business"
+                ]
+            },
+            "meal_info": {
+                "categories": [
+                    "starter",
+                    "main course",
+                    "dessert"
+                ],
+                "required_details": [
+                    "number of people",
+                    "preparation date",
+                    "expiration date",
+                    "price per person",
+                    "cuisine nationality",
+                    "dietary requirements",
+                    "main ingredients",
+                    "photo"
+                ]
+            }
+        },
+        "modules": {
+            "client": {
+                "features": [
+                    "add new client",
+                    "delete client",
+                    "modify client",
+                    "display clients alphabetically",
+                    "display clients by street",
+                    "display clients by purchase amount"
+                ]
+            },
+            "cook": {
+                "features": [
+                    "insert cook",
+                    "modify cook",
+                    "delete cook",
+                    "display client history",
+                    "display dishes by frequency",
+                    "display dish of the day"
+                ]
+            },
+            "order": {
+                "features": [
+                    "create order",
+                    "modify order",
+                    "calculate price",
+                    "determine delivery path"
+                ]
+            },
+            "statistics": {
+                "reports": [
+                    "deliveries per cook",
+                    "orders by period",
+                    "average order price",
+                    "average client accounts",
+                    "order list by client"
+                ]
+            }
+        },
+        "technical_requirements": {
+            "programming": [
+                "C#",
+                "OOP",
+                "Generic Collections",
+                "Database"
+            ],
+            "algorithms": [
+                "Dijkstra",
+                "Bellman-Ford",
+                "Graph Coloring",
+                "Graph Coverage"
+            ]
+        },
+        "stages": {
+            "stage1": {
+                "deadline": "March 1st",
+                "focus": [
+                    "graph implementation",
+                    "database creation"
+                ]
+            },
+            "stage2": {
+                "deadline": "March 30th",
+                "focus": [
+                    "solution generalization",
+                    "parts integration"
+                ]
+            },
+            "stage3": {
+                "deadline": "May 5th",
+                "focus": [
+                    "graph coverage management",
+                    "graph coloring"
+                ]
+            },
+            "stage4": {
+                "type": "bonus",
+                "focus": [
+                    "graphical interface",
+                    "map integration"
+                ]
+            }
+        }
+    }
+}
