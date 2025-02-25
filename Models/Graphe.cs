@@ -93,6 +93,7 @@ public class Graphe
         file.Enqueue(depart);
         visites.Add(depart);
 
+        Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("Parcours en largeur:");
         while (file.Count > 0)
         {
@@ -103,14 +104,17 @@ public class Graphe
                     file.Enqueue(voisin);
         }
         Console.WriteLine();
+        Console.ResetColor();
     }
 
     public void ParcoursProfondeur(int depart)
     {
         HashSet<int> visites = new HashSet<int>();
+        Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("Parcours en profondeur:");
         ParcoursProfondeurRecursif(depart, visites);
         Console.WriteLine();
+        Console.ResetColor();
     }
 
     private void ParcoursProfondeurRecursif(int noeud, HashSet<int> visites)
@@ -170,10 +174,12 @@ public class Graphe
 
     public void AfficherProprietes()
     {
+        Console.ForegroundColor = ConsoleColor.Magenta;
         Console.WriteLine("\nPropriétés du graphe:");
         Console.WriteLine($"Nombre de noeuds: {Noeuds.Count}");
         Console.WriteLine($"Nombre de liens: {Liens.Count}");
         Console.WriteLine($"Mode de représentation: {Mode}");
+        Console.ResetColor();
     }
 
     public static Graphe LoadFromMtxFile(string path, RepresentationMode mode)

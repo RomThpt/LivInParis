@@ -2,10 +2,11 @@
 
 string filePath = Path.Combine("public", "Association-soc-karate", "soc-karate.mtx");
 
-
+Console.ForegroundColor = ConsoleColor.Cyan;
 Console.WriteLine("***************************");
 Console.WriteLine("********  Analyse  ********");
 Console.WriteLine("***************************");
+Console.ResetColor();
 
 var grapheListe = Graphe.LoadFromMtxFile(filePath, RepresentationMode.Liste);
 AnalyzeGraph(grapheListe);
@@ -19,7 +20,11 @@ void AnalyzeGraph(Graphe g)
 {
     g.ParcoursLargeur(0);
     g.ParcoursProfondeur(0);
+
+    Console.ForegroundColor = ConsoleColor.Yellow;
     Console.WriteLine($"\nConnexe: {g.EstConnexe()}");
     Console.WriteLine($"Contient cycle: {g.ContientCycle()}");
+    Console.ResetColor();
+
     g.AfficherProprietes();
 }

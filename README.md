@@ -1,6 +1,6 @@
 # LivInParis Graph Analysis Tool 🎯
 
-A C# school project for analyzing and visualizing graph data structures.
+A C# application for analyzing and visualizing graph data structures.
 
 ## 📋 Features
 
