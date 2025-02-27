@@ -40,12 +40,44 @@ The program will:
     -   `Graphe.cs`: Graph implementation
     -   `GraphVisualizer.cs`: Visualization logic
 
+## 💾 SQL Setup
+
+### Prerequisites
+
+-   MySQL installed via Homebrew
+-   MySQL tools configured in zsh
+
+### Database Configuration
+
+1. Install MySQL if not already done:
+
+```bash
+brew install mysql
+```
+
+2. Start MySQL service:
+
+```bash
+brew services start mysql
+```
+
+3. Configure MySQL in your ~/.zshrc:
+
+```bash
+export PATH="/usr/local/mysql/bin:$PATH"
+```
+
+4. Reload your shell configuration:
+
+```bash
+source ~/.zshrc
+```
+
 ## 📝 Example Usage
 
 The program comes with a sample Karate Club dataset (`soc-karate.mtx`) demonstrating social network analysis.
 
 ## 📚 Citation
-
 
 ```bibtex
 @inproceedings{nr-aaai15,
