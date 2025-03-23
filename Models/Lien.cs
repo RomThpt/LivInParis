@@ -1,30 +1,49 @@
+using System;
+
 namespace LivInParis.Models;
 
+// Classe non générique existante pour la rétrocompatibilité
 public class Lien
 {
-    public Noeud Noeud1 { get; private set; }
-    public Noeud Noeud2 { get; private set; }
+    public Noeud Source { get; }
+    public Noeud Destination { get; }
+    public double Poids { get; }
 
-    public Lien(Noeud n1, Noeud n2)
+    public Lien(Noeud source, Noeud destination, double poids = 1.0)
     {
-        Noeud1 = n1;
-        Noeud2 = n2;
+        Source = source;
+        Destination = destination;
+        Poids = poids;
     }
 
-    public override bool Equals(object? obj)
+    public override bool Equals(object? obj) =>
+        obj is Lien other &&
+        Source.Id == other.Source.Id &&
+        Destination.Id == other.Destination.Id;
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Source.Id, Destination.Id);
+}
+
+// Nouvelle classe de lien générique
+public class Lien<T> where T : IEquatable<T>
+{
+    public Noeud<T> Source { get; }
+    public Noeud<T> Target { get; }
+    public double Weight { get; }
+
+    public Lien(Noeud<T> source, Noeud<T> target, double weight = 1.0)
     {
-        if (obj is Lien autre)
-        {
-            return (Noeud1.Id == autre.Noeud1.Id && Noeud2.Id == autre.Noeud2.Id) ||
-                   (Noeud1.Id == autre.Noeud2.Id && Noeud2.Id == autre.Noeud1.Id);
-        }
-        return false;
+        Source = source;
+        Target = target;
+        Weight = weight;
     }
 
-    public override int GetHashCode()
-    {
-        int min = Math.Min(Noeud1.Id, Noeud2.Id);
-        int max = Math.Max(Noeud1.Id, Noeud2.Id);
-        return HashCode.Combine(min, max);
-    }
+    public override bool Equals(object? obj) =>
+        obj is Lien<T> other &&
+        Source.Id.Equals(other.Source.Id) &&
+        Target.Id.Equals(other.Target.Id);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Source.Id, Target.Id);
 }

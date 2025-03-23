@@ -1,5 +1,9 @@
+using System;
+using System.Collections.Generic;
+
 namespace LivInParis.Models;
 
+// Classe non générique existante pour la rétrocompatibilité
 public class Noeud
 {
     public int Id { get; private set; }
@@ -26,12 +30,31 @@ public class Noeud
             List<Noeud> voisins = new List<Noeud>();
             foreach (var lien in Liens)
             {
-                if (lien.Noeud1 == this)
-                    voisins.Add(lien.Noeud2);
+                if (lien.Source == this)
+                    voisins.Add(lien.Destination);
                 else
-                    voisins.Add(lien.Noeud1);
+                    voisins.Add(lien.Source);
             }
             return voisins;
         }
+    }
+}
+
+// Nouvelle classe de nœud générique
+public class Noeud<T> where T : IEquatable<T>
+{
+    public T Id { get; }
+    public List<Lien<T>> OutgoingEdges { get; }
+
+    public Noeud(T id)
+    {
+        Id = id;
+        OutgoingEdges = new List<Lien<T>>();
+    }
+
+    public void AddEdge(Lien<T> edge)
+    {
+        if (!OutgoingEdges.Contains(edge))
+            OutgoingEdges.Add(edge);
     }
 }

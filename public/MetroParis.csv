@@ -1,70 +1,26 @@
-Station Id,Station,Précédent,Suivant,Temps entre 2 stations (min),Temps de Changement (min),Latitude,Longitude
-1,Porte de Vincennes,2,3,2,,48.847039,2.414582
-2,Nation,1,3,2,,48.848228,2.395611
-3,Reuilly - Diderot,2,4,2,,48.848228,2.383148
-4,Gare de Lyon,3,5,2,,48.844708,2.372928
-5,Quai de la Rapée,4,6,2,,48.844708,2.366457
-6,Bastille,5,7,2,,48.853,2.369
-7,Sully - Morland,6,8,2,,48.850682,2.363
-8,Jussieu,7,9,2,,48.847,2.355
-9,Place Monge,8,10,2,,48.843,2.351
-10,Censier - Daubenton,9,11,2,,48.841,2.351
-11,Les Gobelins,10,12,2,,48.837,2.355
-12,Place d'Italie,11,13,2,,48.832,2.355
-13,Tolbiac,12,14,2,,48.827,2.355
-14,Maison Blanche,13,15,2,,48.822,2.355
-15,Porte d'Italie,14,16,2,,48.819,2.363
-16,Porte de Choisy,15,17,2,,48.819,2.371
-17,Porte d'Ivry,16,18,2,,48.819,2.379
-18,Pierre et Marie Curie,17,19,2,,48.817,2.385
-19,Mairie d'Ivry,18,,2,,48.813,2.388
-20,Porte de la Villette,21,22,2,,48.899,2.386
-21,Coriolis,20,22,2,,48.897,2.384
-22,Ourcq,21,23,2,,48.888,2.382
-23,Laumière,22,24,2,,48.884,2.377
-24,Jaurès,23,25,2,,48.882,2.370
-25,Stalingrad,24,26,2,,48.883,2.366
-26,Château Landon,25,27,2,,48.878,2.362
-27,Gare de l'Est,26,28,2,,48.876,2.358
-28,Strasbourg - Saint-Denis,27,29,2,,48.869,2.353
-29,Arts et Métiers,28,30,2,,48.865,2.355
-30,Réaumur - Sébastopol,29,31,2,,48.865,2.352
-31,Sentier,30,32,2,,48.867,2.348
-32,Bourse,31,33,2,,48.868,2.341
-33,Quatre Septembre,32,34,2,,48.869,2.338
-34,Opéra,33,35,2,,48.870,2.332
-35,Havre - Caumartin,34,36,2,,48.874,2.327
-36,Saint-Lazare,35,37,2,,48.875,2.326
-37,Europe,36,38,2,,48.878,2.323
-38,Liège,37,39,2,,48.878,2.326
-39,Place de Clichy,38,40,2,,48.883,2.327
-40,La Fourche,39,41,2,,48.889,2.327
-41,Guy Môquet,40,42,2,,48.894,2.326
-42,Porte de Saint-Ouen,41,43,2,,48.899,2.326
-43,Garibaldi,42,44,2,,48.906,2.326
-44,Mairie de Saint-Ouen,43,,2,,48.911,2.329
-45,Porte de Clignancourt,46,47,2,,48.899,2.344
-46,Simplon,45,47,2,,48.896,2.345
-47,Marcadet - Poissonniers,46,48,2,,48.892,2.349
-48,Château Rouge,47,49,2,,48.888,2.349
-49,Barbès - Rochechouart,48,50,2,,48.884,2.349
-50,Gare du Nord,49,51,2,,48.880,2.355
-51,Gare de l'Est,50,52,2,,48.876,2.358
-52,Château d'Eau,51,53,2,,48.873,2.357
-53,Strasbourg - Saint-Denis,52,54,2,,48.869,2.353
-54,Réaumur - Sébastopol,53,55,2,,48.865,2.352
-55,Etienne Marcel,54,56,2,,48.863,2.349
-56,Châtelet,55,57,2,,48.858,2.347
-57,Cité,56,58,2,,48.855,2.345
-58,Saint-Michel,57,59,2,,48.853,2.343
-59,Odéon,58,60,2,,48.853,2.338
-60,Mabillon,59,61,2,,48.852,2.334
-61,Saint-Sulpice,60,62,2,,48.850,2.331
-62,Notre-Dame-des-Champs,61,63,2,,48.847,2.328
-63,Montparnasse - Bienvenüe,62,64,2,,48.842,2.323
-64,Falguière,63,65,2,,48.841,2.318
-65,Pasteur,64,66,2,,48.841,2.312
-66,Volontaires,65,67,2,,48.839,2.308
-67,Vaugirard,66,68,2,,48.839,2.303
-68,Convention,67,69,2,,48.837,2.298
-69,Porte de Versailles,68 
+Station Id,Station,Précédent,Suivant,Temps entre 2 stations (min),Temps de Changement (min),Latitude,Longitude,Correspondances
+1,Porte de Vincennes,2,3,2,,48.847039,2.414582,[T3a]
+2,Nation,1,3,2,,48.848228,2.395611,"[1, 2, 6, 9, RER A]"
+3,Reuilly - Diderot,2,4,2,,48.848228,2.383148,"[1, 8]"
+4,Gare de Lyon,3,5,2,,48.844708,2.372928,"[1, 14, RER A, RER D]"
+5,Quai de la Rapée,4,6,2,,48.844708,2.366457,[]
+6,Bastille,5,7,2,,48.853,2.369,"[1, 5, 8]"
+7,Sully - Morland,6,8,2,,48.850682,2.363,[]
+8,Jussieu,7,9,2,,48.847,2.355,"[7, 10]"
+9,Place Monge,8,10,2,,48.843,2.351,[]
+10,Censier - Daubenton,9,11,2,,48.841,2.351,[]
+11,Les Gobelins,10,12,2,,48.837,2.355,[]
+12,Place d'Italie,11,13,2,,48.832,2.355,"[5, 6, 7]"
+13,Tolbiac,12,14,2,,48.827,2.355,[]
+14,Maison Blanche,13,15,2,,48.822,2.355,[]
+15,Porte d'Italie,14,16,2,,48.819,2.363,[T3a]
+16,Porte de Choisy,15,17,2,,48.819,2.371,[T3a]
+17,Porte d'Ivry,16,18,2,,48.819,2.379,[T3a]
+18,Pierre et Marie Curie,17,19,2,,48.817,2.385,[]
+19,Mairie d'Ivry,18,,2,,48.813,2.388,[]
+20,Châtelet,21,22,2,,48.857,2.347,"[1, 4, 7, 11, 14]"
+21,Hôtel de Ville,20,22,2,,48.857,2.351,"[1, 11]"
+22,Châtelet - Les Halles,20,23,2,,48.861,2.346,"[1, 4, 7, 11, 14]"
+23,Les Halles,22,24,2,,48.862,2.346,"[4, 7, 11, 14]"
+24,Louvre - Rivoli,23,25,2,,48.861,2.341,[]
+25,Pont Neuf,24,26,2,,48.859,2.341,[]

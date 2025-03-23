@@ -1,30 +1,58 @@
-﻿using LivInParis.Models;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using LivInParis.Models;
+using LivInParis.Services;
 
-string filePath = Path.Combine("public", "Association-soc-karate", "soc-karate.mtx");
+Console.WriteLine("Bienvenue à Liv in Paris!");
 
-Console.ForegroundColor = ConsoleColor.Cyan;
-Console.WriteLine("***************************");
-Console.WriteLine("********  Analyse  ********");
-Console.WriteLine("***************************");
-Console.ResetColor();
+// Création du service métro et chargement des données
+var metroService = new MetroService();
+metroService.LoadSampleMetroData();
 
-var grapheListe = Graphe.LoadFromMtxFile(filePath, RepresentationMode.Liste);
-AnalyzeGraph(grapheListe);
+// Obtenir toutes les stations et lignes
+var stations = metroService.GetAllStations();
+var lines = metroService.GetAllLines();
+
+// Afficher les informations
+Console.WriteLine($"\nNombre de stations de métro: {stations.Count}");
+Console.WriteLine($"Nombre de lignes de métro: {lines.Count}");
+
+// Construire le graphe du métro
+var metroGraph = metroService.BuildMetroGraph();
 
 
-// Visualization
-GraphVisualizer.Visualize(grapheListe, "karate_liste.png");
-Console.WriteLine("\nkarate_liste.png genéré");
+// Visualisation du réseau métro complet
+GraphVisualizer.Visualize(metroGraph, "./public/graphe/metro_network_.png");
+Console.WriteLine($"\nVisualisation du réseau: {"./public/graphe/metro_network_.png"}");
 
-void AnalyzeGraph(Graphe g)
+// Recherche d'itinéraire
+if (stations.Count > 0)
 {
-    g.ParcoursLargeur(0);
-    g.ParcoursProfondeur(0);
+    // Exemple de stations de départ et d'arrivée
+    var startStation = stations[0];
+    var endStation = stations[stations.Count > 3 ? 3 : stations.Count - 1];
 
-    Console.ForegroundColor = ConsoleColor.Yellow;
-    Console.WriteLine($"\nConnexe: {g.EstConnexe()}");
-    Console.WriteLine($"Contient cycle: {g.ContientCycle()}");
-    Console.ResetColor();
+    Console.WriteLine($"\nRecherche du chemin de {startStation.Name} à {endStation.Name}:");
 
-    g.AfficherProprietes();
+    var path = metroGraph.GetShortestPath(startStation.Name, endStation.Name);
+
+    if (path.Count > 0)
+    {
+        Console.WriteLine("Itinéraire trouvé:");
+        foreach (var stationName in path)
+        {
+            Console.WriteLine($" - {stationName}");
+        }
+
+        // Visualisation de l'itinéraire
+        string itineraryFilePath = Path.Combine($"metro_itinerary.png");
+        GraphVisualizer.Visualize(metroGraph, itineraryFilePath, path);
+        Console.WriteLine($"\nVisualisation de l'itinéraire: {itineraryFilePath}");
+    }
+    else
+    {
+        Console.WriteLine("Aucun itinéraire trouvé.");
+    }
 }
