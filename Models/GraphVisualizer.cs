@@ -118,12 +118,10 @@ public static class GraphVisualizer
             }
 
             // Dessin des connexions
-            using var edgePaint = new SKPaint
-            {
-                Color = SKColors.LightGray,
-                StrokeWidth = 2,
-                IsAntialias = true
-            };
+            // Find min and max weights for normalization
+            double minWeight = graph.Edges.Min(e => e.Weight);
+            double maxWeight = graph.Edges.Max(e => e.Weight);
+            double range = maxWeight - minWeight;
 
             foreach (var edge in graph.Edges)
             {
@@ -132,6 +130,21 @@ public static class GraphVisualizer
                 {
                     var p1 = ConvertToPoint(sPos.Lat, sPos.Lon);
                     var p2 = ConvertToPoint(tPos.Lat, tPos.Lon);
+
+                    // Normalize the weight to determine line thickness
+                    float normalizedWeight = (float)((edge.Weight - minWeight) / (range > 0 ? range : 1));
+                    float thickness = 3 * (1 - (normalizedWeight * 0.7f)) + 0.5f;
+
+                    // Create a gradient color
+                    byte colorValue = (byte)(180 + (normalizedWeight * 75));
+
+                    using var edgePaint = new SKPaint
+                    {
+                        Color = new SKColor(colorValue, colorValue, colorValue),
+                        StrokeWidth = thickness,
+                        IsAntialias = true
+                    };
+
                     canvas.DrawLine(p1, p2, edgePaint);
                 }
             }
@@ -270,18 +283,32 @@ public static class GraphVisualizer
 
     private static void DrawGenericConnections<T>(SKCanvas canvas, Dictionary<T, SKPoint> positions, List<Lien<T>> edges) where T : IEquatable<T>
     {
-        using var paint = new SKPaint
-        {
-            Color = SKColors.Gray,
-            StrokeWidth = 1,
-            IsAntialias = true,
-        };
+        // Find min and max weights for normalization
+        double minWeight = edges.Min(e => e.Weight);
+        double maxWeight = edges.Max(e => e.Weight);
+        double range = maxWeight - minWeight;
 
         foreach (var edge in edges)
         {
             if (positions.TryGetValue(edge.Source.Id, out var source) &&
                 positions.TryGetValue(edge.Target.Id, out var target))
             {
+                // Normalize the weight to a value between 0 and 1
+                float normalizedWeight = (float)((edge.Weight - minWeight) / (range > 0 ? range : 1));
+
+                // Use the normalized weight to determine line thickness (inverse - thinner for longer distances)
+                float thickness = 3 * (1 - (normalizedWeight * 0.7f)) + 0.5f;  // Between 0.5 and 3
+
+                // Create a gradient color from black (short) to light gray (long distance)
+                byte colorValue = (byte)(180 + (normalizedWeight * 75));  // Between 180 and 255
+
+                using var paint = new SKPaint
+                {
+                    Color = new SKColor(colorValue, colorValue, colorValue),
+                    StrokeWidth = thickness,
+                    IsAntialias = true,
+                };
+
                 canvas.DrawLine(source, target, paint);
             }
         }

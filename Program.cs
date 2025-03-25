@@ -5,6 +5,27 @@ using System.Linq;
 using LivInParis.Models;
 using LivInParis.Services;
 
+// Helper method to calculate Haversine distance between two geographic points
+static double CalculateDistance(double lat1, double lon1, double lat2, double lon2)
+{
+    const double EarthRadiusKm = 6371.0;
+
+    var dLat = ToRadians(lat2 - lat1);
+    var dLon = ToRadians(lon2 - lon1); // Fixed the calculation (was lon2 - lat1)
+
+    var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+            Math.Cos(ToRadians(lat1)) * Math.Cos(ToRadians(lat2)) *
+            Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+
+    var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+    return EarthRadiusKm * c; // Distance in kilometers
+}
+
+static double ToRadians(double degrees)
+{
+    return degrees * Math.PI / 180.0;
+}
+
 Console.WriteLine("Bienvenue à Liv in Paris!");
 
 // Création du service métro et chargement des données
@@ -20,8 +41,48 @@ var lines = metroService.GetAllLines();
 Console.WriteLine($"\nNombre de stations de métro: {stations.Count}");
 Console.WriteLine($"Nombre de lignes de métro: {lines.Count}");
 
-// Construire le graphe du métro avec les positions géographiques
+// Construire le graphe du métro avec les positions géographiques et distances graduées
 var (metroGraph, stationGeoPositions) = metroService.BuildMetroGraphWithPositions();
+
+// Maintenant, mettons à jour les poids des arêtes avec les distances réelles
+Console.WriteLine("\nMise à jour du graphe avec distances géographiques graduées...");
+
+// Create a new graph with appropriate weights
+var weightedMetroGraph = new Graphe<string>();
+
+// First, add all nodes
+foreach (var node in metroGraph.Nodes.Keys)
+{
+    weightedMetroGraph.AddNode(node);
+}
+
+// Then, add edges with calculated weights
+foreach (var edge in metroGraph.Edges)
+{
+    var sourceStationId = edge.Source.Id;
+    var targetStationId = edge.Target.Id;
+
+    if (stationGeoPositions.TryGetValue(sourceStationId, out var sourcePos) &&
+        stationGeoPositions.TryGetValue(targetStationId, out var targetPos))
+    {
+        // Calculer la distance réelle entre les stations en kilomètres
+        double distance = CalculateDistance(
+            sourcePos.Lat, sourcePos.Lon,
+            targetPos.Lat, targetPos.Lon
+        );
+
+        // Add a new edge with the calculated weight
+        weightedMetroGraph.AddEdge(sourceStationId, targetStationId, distance);
+    }
+    else
+    {
+        // If positions aren't available, keep original weight
+        weightedMetroGraph.AddEdge(sourceStationId, targetStationId, edge.Weight);
+    }
+}
+
+// Replace the original graph with our weighted graph
+metroGraph = weightedMetroGraph;
 
 // Debug output to check stations data
 Console.WriteLine("\nVérification des coordonnées des stations:");
@@ -137,13 +198,6 @@ double Heuristic(string a, string b)
     return Math.Sqrt(dx * dx + dy * dy) * 100; // Facteur d'échelle pour A*
 }
 
-// Test de l'algorithme A*
-stopwatch.Restart();
-var (aStarDistances, aStarPredecessors) = metroGraph.AStar(sourceStation.Name, destStation.Name, Heuristic);
-var aStarPath = metroGraph.GetPathFromPredecessors(aStarPredecessors, sourceStation.Name, destStation.Name);
-stopwatch.Stop();
-long aStarTime = stopwatch.ElapsedMilliseconds;
-double aStarDistance = aStarDistances[destStation.Name];
 
 // Test de l'algorithme de Floyd-Warshall (attention: peut être lent pour de grands graphes)
 Console.WriteLine("\nCalcul de Floyd-Warshall en cours (peut prendre du temps)...");
@@ -160,7 +214,6 @@ Console.WriteLine($"{"Algorithme",-15} {"Temps (ms)",10} {"Stations",8} {"Distan
 Console.WriteLine(new string('-', 50));
 Console.WriteLine($"{"Dijkstra",-15} {dijkstraTime,10} {dijkstraPath.Count,8} {dijkstraDistance,10:F2}");
 Console.WriteLine($"{"Bellman-Ford",-15} {bellmanFordTime,10} {bellmanFordPath.Count,8} {bellmanFordDistance,10:F2}");
-Console.WriteLine($"{"A*",-15} {aStarTime,10} {aStarPath.Count,8} {aStarDistance,10:F2}");
 Console.WriteLine($"{"Floyd-Warshall",-15} {floydWarshallTime,10} {floydWarshallPath.Count,8} {floydWarshallDistance,10:F2}");
 
 // Visualisation des différents chemins
@@ -177,12 +230,6 @@ Console.WriteLine($"\nChemin Bellman-Ford:");
 Console.WriteLine($"  Nombre de stations: {bellmanFordPath.Count}");
 Console.WriteLine($"  Distance totale: {bellmanFordDistance:F2}");
 Console.WriteLine($"  Itinéraire: {string.Join(" → ", bellmanFordPath)}");
-
-// Affiche les détails du chemin A*
-Console.WriteLine($"\nChemin A*:");
-Console.WriteLine($"  Nombre de stations: {aStarPath.Count}");
-Console.WriteLine($"  Distance totale: {aStarDistance:F2}");
-Console.WriteLine($"  Itinéraire: {string.Join(" → ", aStarPath)}");
 
 // Affiche les détails du chemin Floyd-Warshall
 Console.WriteLine($"\nChemin Floyd-Warshall:");
