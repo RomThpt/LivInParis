@@ -234,29 +234,223 @@ public class Graphe<T> where T : IEquatable<T>
         return distances;
     }
 
+    // Version améliorée de Dijkstra qui retourne aussi les prédécesseurs
+    public (Dictionary<T, double> distances, Dictionary<T, T> predecessors) DijkstraWithPath(T start)
+    {
+        var distances = new Dictionary<T, double>();
+        var predecessors = new Dictionary<T, T>();
+        var priorityQueue = new PriorityQueue<T, double>();
+
+        foreach (var node in Nodes.Keys)
+        {
+            distances[node] = double.PositiveInfinity;
+            predecessors[node] = default;
+        }
+
+        distances[start] = 0;
+        priorityQueue.Enqueue(start, 0);
+
+        while (priorityQueue.Count > 0)
+        {
+            var current = priorityQueue.Dequeue();
+
+            foreach (var edge in Nodes[current].OutgoingEdges)
+            {
+                var neighbor = edge.Target.Id;
+                var newDist = distances[current] + edge.Weight;
+
+                if (newDist < distances[neighbor])
+                {
+                    distances[neighbor] = newDist;
+                    predecessors[neighbor] = current;
+                    priorityQueue.Enqueue(neighbor, newDist);
+                }
+            }
+        }
+
+        return (distances, predecessors);
+    }
+
+    // Algorithme de Bellman-Ford pour la détection de cycles négatifs
+    public (Dictionary<T, double> distances, Dictionary<T, T> predecessors) BellmanFord(T start)
+    {
+        var distances = new Dictionary<T, double>();
+        var predecessors = new Dictionary<T, T>();
+
+        foreach (var node in Nodes.Keys)
+        {
+            distances[node] = double.PositiveInfinity;
+            predecessors[node] = default;
+        }
+        distances[start] = 0;
+
+        for (int i = 0; i < Nodes.Count - 1; i++)
+        {
+            foreach (var edge in Edges)
+            {
+                if (distances[edge.Source.Id] + edge.Weight < distances[edge.Target.Id])
+                {
+                    distances[edge.Target.Id] = distances[edge.Source.Id] + edge.Weight;
+                    predecessors[edge.Target.Id] = edge.Source.Id;
+                }
+            }
+        }
+
+        // Vérification des cycles négatifs
+        foreach (var edge in Edges)
+        {
+            if (distances[edge.Source.Id] + edge.Weight < distances[edge.Target.Id])
+                throw new InvalidOperationException("Cycle négatif détecté");
+        }
+
+        return (distances, predecessors);
+    }
+
+    // Algorithme A* pour recherche heuristique
+    public (Dictionary<T, double> distances, Dictionary<T, T> predecessors) AStar(
+        T start,
+        T goal,
+        Func<T, T, double> heuristic)
+    {
+        var openSet = new PriorityQueue<T, double>();
+        var closedSet = new HashSet<T>();
+
+        var gScore = new Dictionary<T, double>();
+        var fScore = new Dictionary<T, double>();
+        var predecessors = new Dictionary<T, T>();
+
+        foreach (var node in Nodes.Keys)
+        {
+            gScore[node] = double.PositiveInfinity;
+            fScore[node] = double.PositiveInfinity;
+            predecessors[node] = default;
+        }
+
+        gScore[start] = 0;
+        fScore[start] = heuristic(start, goal);
+        openSet.Enqueue(start, fScore[start]);
+
+        while (openSet.Count > 0)
+        {
+            var current = openSet.Dequeue();
+
+            if (current.Equals(goal))
+                break;
+
+            closedSet.Add(current);
+
+            foreach (var edge in Nodes[current].OutgoingEdges)
+            {
+                var neighbor = edge.Target.Id;
+
+                if (closedSet.Contains(neighbor))
+                    continue;
+
+                var tentativeGScore = gScore[current] + edge.Weight;
+
+                if (tentativeGScore < gScore[neighbor])
+                {
+                    predecessors[neighbor] = current;
+                    gScore[neighbor] = tentativeGScore;
+                    fScore[neighbor] = gScore[neighbor] + heuristic(neighbor, goal);
+
+                    openSet.Enqueue(neighbor, fScore[neighbor]);
+                }
+            }
+        }
+
+        return (gScore, predecessors);
+    }
+
     // Algorithme de Floyd-Warshall pour tous les plus courts chemins
-    public Dictionary<T, Dictionary<T, double>> FloydWarshall()
+    public (Dictionary<T, Dictionary<T, double>> distances, Dictionary<T, Dictionary<T, T>> predecessors) FloydWarshall()
     {
         var dist = new Dictionary<T, Dictionary<T, double>>();
+        var pred = new Dictionary<T, Dictionary<T, T>>();
 
+        // Initialisation
         foreach (var u in Nodes.Keys)
         {
             dist[u] = new Dictionary<T, double>();
+            pred[u] = new Dictionary<T, T>();
             foreach (var v in Nodes.Keys)
+            {
                 dist[u][v] = double.PositiveInfinity;
+                pred[u][v] = default;
+            }
             dist[u][u] = 0;
         }
 
+        // Remplissage initial
         foreach (var edge in Edges)
+        {
             dist[edge.Source.Id][edge.Target.Id] = edge.Weight;
+            pred[edge.Source.Id][edge.Target.Id] = edge.Source.Id;
+        }
 
+        // Algorithme principal
         foreach (var k in Nodes.Keys)
             foreach (var i in Nodes.Keys)
                 foreach (var j in Nodes.Keys)
+                {
                     if (dist[i][k] + dist[k][j] < dist[i][j])
+                    {
                         dist[i][j] = dist[i][k] + dist[k][j];
+                        pred[i][j] = pred[k][j];
+                    }
+                }
 
-        return dist;
+        return (dist, pred);
+    }
+
+    // Méthode utilitaire pour reconstruire un chemin à partir des prédécesseurs
+    public List<T> GetPathFromPredecessors(Dictionary<T, T> predecessors, T start, T end)
+    {
+        var path = new List<T>();
+        var current = end;
+
+        // Vérifier si un chemin existe
+        if (EqualityComparer<T>.Default.Equals(predecessors[current], default(T)) && !current.Equals(start))
+            return path;
+
+        while (!current.Equals(start))
+        {
+            path.Add(current);
+            current = predecessors[current];
+
+            // Protection contre les boucles infinies
+            if (path.Contains(current))
+                break;
+        }
+        path.Add(start);
+        path.Reverse();
+
+        return path;
+    }
+
+    // Méthode utilitaire pour reconstruire un chemin à partir des prédécesseurs de Floyd-Warshall
+    public List<T> GetPathFloydWarshall(Dictionary<T, Dictionary<T, T>> predecessors, T start, T end)
+    {
+        var path = new List<T>();
+
+        // Vérifier si un chemin existe
+        if (EqualityComparer<T>.Default.Equals(predecessors[start][end], default(T)) && !start.Equals(end))
+            return path;
+
+        var current = end;
+        while (!current.Equals(start))
+        {
+            path.Add(current);
+            current = predecessors[start][current];
+
+            // Protection contre les boucles infinies
+            if (path.Contains(current))
+                break;
+        }
+        path.Add(start);
+        path.Reverse();
+
+        return path;
     }
 
     // Obtenir le plus court chemin entre deux nœuds
