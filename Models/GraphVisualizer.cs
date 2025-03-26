@@ -4,7 +4,7 @@ namespace LivInParis.Models;
 
 public static class GraphVisualizer
 {
-    public static void Visualize(Graphe graphe, string filePath)
+    public static void Visualize<T>(Graphe<T> graphe, string filePath) where T : IEquatable<T>
     {
         const int width = 800;
         const int height = 600;
@@ -15,7 +15,7 @@ public static class GraphVisualizer
             SKCanvas canvas = surface.Canvas;
             canvas.Clear(SKColors.White);
 
-            var nodes = graphe.Noeuds.Keys.OrderBy(id => id).ToList();
+            var nodes = graphe.Noeuds.Keys.ToList();
             if (nodes.Count == 0) return;
 
             var positions = CalculateNodePositions(width, height, margin, nodes);
@@ -31,9 +31,9 @@ public static class GraphVisualizer
         }
     }
 
-    private static Dictionary<int, SKPoint> CalculateNodePositions(int width, int height, float margin, List<int> nodes)
+    private static Dictionary<T, SKPoint> CalculateNodePositions<T>(int width, int height, float margin, List<T> nodes) where T : IEquatable<T>
     {
-        var positions = new Dictionary<int, SKPoint>();
+        var positions = new Dictionary<T, SKPoint>();
         float centerX = width / 2f;
         float centerY = height / 2f;
         float radius = (Math.Min(width, height) / 2f) - margin;
@@ -48,7 +48,7 @@ public static class GraphVisualizer
         return positions;
     }
 
-    private static void DrawConnections(SKCanvas canvas, Dictionary<int, SKPoint> positions, List<Lien> liens)
+    private static void DrawConnections<T>(SKCanvas canvas, Dictionary<T, SKPoint> positions, List<Lien<T>> liens) where T : IEquatable<T>
     {
         using var edgePaint = new SKPaint
         {
@@ -67,7 +67,7 @@ public static class GraphVisualizer
         }
     }
 
-    private static void DrawNodes(SKCanvas canvas, Dictionary<int, SKPoint> positions)
+    private static void DrawNodes<T>(SKCanvas canvas, Dictionary<T, SKPoint> positions) where T : IEquatable<T>
     {
         using var nodePaint = new SKPaint
         {
@@ -86,7 +86,7 @@ public static class GraphVisualizer
         foreach (var (id, pos) in positions)
         {
             canvas.DrawCircle(pos, 20, nodePaint);
-            canvas.DrawText(id.ToString(), pos.X, pos.Y + 7, textPaint);
+            canvas.DrawText(id?.ToString() ?? string.Empty, pos.X, pos.Y + 7, textPaint);
         }
     }
 }

@@ -1,17 +1,22 @@
 namespace LivInParis.Models;
 
-public class Noeud
+public class Noeud<T> where T : IEquatable<T>
 {
-    public int Id { get; private set; }
-    public List<Lien> Liens { get; private set; }
+    public T Id { get; private set; }
+    public List<Lien<T>> Liens { get; private set; }
 
-    public Noeud(int id)
+    // Propriétés géographiques pour les applications de transport
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+    public string? Nom { get; set; }
+
+    public Noeud(T id)
     {
         Id = id;
-        Liens = new List<Lien>();
+        Liens = new List<Lien<T>>();
     }
 
-    public void AjouterLien(Lien lien)
+    public void AjouterLien(Lien<T> lien)
     {
         if (!Liens.Contains(lien))
         {
@@ -19,14 +24,14 @@ public class Noeud
         }
     }
 
-    public List<Noeud> Voisins
+    public List<Noeud<T>> Voisins
     {
         get
         {
-            List<Noeud> voisins = new List<Noeud>();
+            List<Noeud<T>> voisins = new List<Noeud<T>>();
             foreach (var lien in Liens)
             {
-                if (lien.Noeud1 == this)
+                if (lien.Noeud1.Id!.Equals(Id))
                     voisins.Add(lien.Noeud2);
                 else
                     voisins.Add(lien.Noeud1);
