@@ -1,5 +1,8 @@
 namespace LivInParis.Models;
 
+using System.Globalization;
+using System.Xml.Linq;
+
 public class Graphe<T> where T : IEquatable<T>
 {
     public Dictionary<T, Noeud<T>> Noeuds { get; private set; }
@@ -329,6 +332,57 @@ public class Graphe<T> where T : IEquatable<T>
             if (int.TryParse(parts[0], out int id1) && int.TryParse(parts[1], out int id2))
                 graphe.AjouterLien(id1 - 1, id2 - 1);
         }
+        return graphe;
+    }
+
+    public static Graphe<string> LoadFromXmlFile(string path, RepresentationMode mode)
+    {
+        var graphe = new Graphe<string>(mode);
+        
+        XDocument xml = XDocument.Load(path);
+
+        // Parse all stations
+        foreach (XElement stationElement in xml.Descendants("station"))
+        {
+            string id = stationElement.Attribute("id")?.Value ?? string.Empty;
+            string nom = stationElement.Element("nom")?.Value ?? id;
+            
+            if (double.TryParse(stationElement.Element("latitude")?.Value, 
+                                CultureInfo.InvariantCulture, out double latitude) &&
+                double.TryParse(stationElement.Element("longitude")?.Value, 
+                                CultureInfo.InvariantCulture, out double longitude))
+            {
+                graphe.AjouterNoeud(id);
+                graphe.Noeuds[id].Latitude = latitude;
+                graphe.Noeuds[id].Longitude = longitude;
+                graphe.Noeuds[id].Nom = nom;
+            }
+        }
+
+        // Parse services to create connections
+        foreach (XElement service in xml.Descendants("service"))
+        {
+            foreach (XElement trajet in service.Elements("trajet"))
+            {
+                var stations = trajet.Elements("station")
+                    .Select(s => s.Attribute("ref-id")?.Value)
+                    .Where(id => id != null)
+                    .ToList();
+
+                for (int i = 0; i < stations.Count - 1; i++)
+                {
+                    // Calculate distance between stations using Haversine formula for edge weight
+                    var station1 = graphe.Noeuds[stations[i]!];
+                    var station2 = graphe.Noeuds[stations[i+1]!];
+                    double distance = GeoCalculateur.CalculerDistanceHaversine(
+                        station1.Latitude, station1.Longitude,
+                        station2.Latitude, station2.Longitude);
+                    
+                    graphe.AjouterLien(stations[i]!, stations[i+1]!, distance);
+                }
+            }
+        }
+
         return graphe;
     }
 }
