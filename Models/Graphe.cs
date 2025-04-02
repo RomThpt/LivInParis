@@ -129,7 +129,6 @@ public class Graphe<T> where T : IEquatable<T>
     {
         if (!Noeuds.ContainsKey(noeud) || visites.Contains(noeud)) return;
         visites.Add(noeud);
-        Console.Write($"{noeud} ");
         foreach (var voisin in GetVoisins(noeud))
             ParcoursProfondeurRecursif(voisin, visites);
     }
@@ -317,7 +316,6 @@ public class Graphe<T> where T : IEquatable<T>
         Console.WriteLine("\nPropriétés du graphe:");
         Console.WriteLine($"Nombre de noeuds: {Noeuds.Count}");
         Console.WriteLine($"Nombre de liens: {Liens.Count}");
-        Console.WriteLine($"Mode de représentation: {Mode}");
         Console.ResetColor();
     }
 
