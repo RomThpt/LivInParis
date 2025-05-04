@@ -217,7 +217,7 @@ public class Graphe<T> where T : IEquatable<T>
             // Mettre à jour les distances pour les voisins
             foreach (var lien in Noeuds[courant].Liens)
             {
-                var voisin = lien.Noeud1.Id!.Equals(courant) ? lien.Noeud2.Id : lien.Noeud1.Id;
+                var voisin = lien.Noeud1.Id.Equals(courant) ? lien.Noeud2.Id : lien.Noeud1.Id;
                 var nouvelleDistance = distances[courant] + lien.Poids;
 
                 if (nouvelleDistance < distances[voisin])
@@ -336,7 +336,7 @@ public class Graphe<T> where T : IEquatable<T>
     public static Graphe<string> LoadFromXmlFile(string path, RepresentationMode mode)
     {
         var graphe = new Graphe<string>(mode);
-        
+
         XDocument xml = XDocument.Load(path);
 
         // Parse all stations
@@ -344,10 +344,10 @@ public class Graphe<T> where T : IEquatable<T>
         {
             string id = stationElement.Attribute("id")?.Value ?? string.Empty;
             string nom = stationElement.Element("nom")?.Value ?? id;
-            
-            if (double.TryParse(stationElement.Element("latitude")?.Value, 
+
+            if (double.TryParse(stationElement.Element("latitude")?.Value,
                                 CultureInfo.InvariantCulture, out double latitude) &&
-                double.TryParse(stationElement.Element("longitude")?.Value, 
+                double.TryParse(stationElement.Element("longitude")?.Value,
                                 CultureInfo.InvariantCulture, out double longitude))
             {
                 graphe.AjouterNoeud(id);
@@ -371,16 +371,184 @@ public class Graphe<T> where T : IEquatable<T>
                 {
                     // Calculate distance between stations using Haversine formula for edge weight
                     var station1 = graphe.Noeuds[stations[i]!];
-                    var station2 = graphe.Noeuds[stations[i+1]!];
+                    var station2 = graphe.Noeuds[stations[i + 1]!];
                     double distance = GeoCalculateur.CalculerDistanceHaversine(
                         station1.Latitude, station1.Longitude,
                         station2.Latitude, station2.Longitude);
-                    
-                    graphe.AjouterLien(stations[i]!, stations[i+1]!, distance);
+
+                    graphe.AjouterLien(stations[i]!, stations[i + 1]!, distance);
                 }
             }
         }
 
         return graphe;
+    }
+
+    public Dictionary<T, int> ColorerGraphe()
+    {
+        var couleurs = new Dictionary<T, int>();
+        var noeudsOrdonnes = new List<T>(Noeuds.Keys);
+
+        // Trier les noeuds par degré décroissant (nombre de connexions)
+        noeudsOrdonnes.Sort((a, b) =>
+            GetVoisins(b).Count().CompareTo(GetVoisins(a).Count()));
+
+        foreach (var noeud in noeudsOrdonnes)
+        {
+            // Ensemble des couleurs déjà utilisées par les voisins
+            var couleursVoisins = new HashSet<int>();
+            foreach (var voisin in GetVoisins(noeud))
+            {
+                if (couleurs.ContainsKey(voisin))
+                    couleursVoisins.Add(couleurs[voisin]);
+            }
+
+            // Trouver la première couleur disponible
+            int couleur = 0;
+            while (couleursVoisins.Contains(couleur))
+                couleur++;
+
+            couleurs[noeud] = couleur;
+        }
+
+        return couleurs;
+    }
+
+    public void AfficherColoration()
+    {
+        var coloration = ColorerGraphe();
+        var nombreCouleurs = coloration.Values.Max() + 1;
+
+        Console.WriteLine($"Coloration du graphe avec {nombreCouleurs} couleurs:");
+
+        // Grouper les noeuds par couleur
+        var noeudsParCouleur = new Dictionary<int, List<T>>();
+        foreach (var kvp in coloration)
+        {
+            if (!noeudsParCouleur.ContainsKey(kvp.Value))
+                noeudsParCouleur[kvp.Value] = new List<T>();
+
+            noeudsParCouleur[kvp.Value].Add(kvp.Key);
+        }
+
+        // Afficher les noeuds regroupés par couleur
+        foreach (var couleur in Enumerable.Range(0, nombreCouleurs))
+        {
+            Console.ForegroundColor = (ConsoleColor)(couleur % 15 + 1);
+            Console.Write($"Couleur {couleur}: ");
+
+            if (noeudsParCouleur.ContainsKey(couleur))
+            {
+                Console.WriteLine(string.Join(", ", noeudsParCouleur[couleur]));
+            }
+            else
+            {
+                Console.WriteLine("(aucun noeud)");
+            }
+        }
+
+        Console.ResetColor();
+    }
+
+    public List<Lien<T>> TrouverCircuitEulerien()
+    {
+        // Vérifier si le graphe est connexe
+        if (!EstConnexe())
+            throw new InvalidOperationException("Le graphe doit être connexe pour trouver un circuit eulérien.");
+
+        // Identifier les noeuds de degré impair
+        var noeudsImpairs = Noeuds.Values
+            .Where(n => n.Liens.Count % 2 != 0)
+            .Select(n => n.Id)
+            .ToList();
+
+        if (noeudsImpairs.Count > 0 && noeudsImpairs.Count != 2)
+            throw new InvalidOperationException("Le graphe doit être eulérien ou semi-eulérien.");
+
+        // Point de départ: premier noeud avec degré impair ou n'importe quel noeud si tous les degrés sont pairs
+        T depart = noeudsImpairs.Count == 2 ? noeudsImpairs[0] : Noeuds.Keys.First();
+
+        // Créer une copie des liens pour marquer ceux qu'on a visités
+        var liensRestants = new List<Lien<T>>(Liens);
+        var circuit = new List<Lien<T>>();
+        var currentNoeud = depart;
+
+        while (liensRestants.Count > 0)
+        {
+            // Trouver un lien adjacent au noeud courant
+            var lien = liensRestants.FirstOrDefault(l =>
+                l.Noeud1.Id.Equals(currentNoeud) || l.Noeud2.Id.Equals(currentNoeud));
+
+            if (lien != null)
+            {
+                liensRestants.Remove(lien);
+                circuit.Add(lien);
+
+                // Passer au noeud suivant
+                currentNoeud = lien.Noeud1.Id.Equals(currentNoeud) ? lien.Noeud2.Id : lien.Noeud1.Id;
+            }
+            else
+            {
+                // Si on est bloqué, cela signifie qu'on a un sous-circuit - on doit explorer un autre chemin
+                // Cette implémentation simplifiée peut ne pas trouver le circuit optimal
+                // L'algorithme complet du facteur chinois serait nécessaire pour un graphe non eulérien
+                break;
+            }
+        }
+
+        return circuit;
+    }
+
+    public double CalculerLongueurTotaleCircuit(List<Lien<T>> circuit)
+    {
+        return circuit.Sum(lien => lien.Poids);
+    }
+
+    public void AfficherCircuitEulerien()
+    {
+        try
+        {
+            var circuit = TrouverCircuitEulerien();
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine("Circuit eulérien trouvé:");
+
+            var itineraire = new List<T>();
+            T noeudPrecedent = default;
+
+            foreach (var lien in circuit)
+            {
+                if (itineraire.Count == 0)
+                {
+                    itineraire.Add(lien.Noeud1.Id);
+                    noeudPrecedent = lien.Noeud2.Id;
+                }
+                else
+                {
+                    if (lien.Noeud1.Id.Equals(noeudPrecedent))
+                    {
+                        itineraire.Add(noeudPrecedent);
+                        noeudPrecedent = lien.Noeud2.Id;
+                    }
+                    else
+                    {
+                        itineraire.Add(noeudPrecedent);
+                        noeudPrecedent = lien.Noeud1.Id;
+                    }
+                }
+            }
+
+            // Ajouter le dernier noeud pour compléter le circuit
+            itineraire.Add(noeudPrecedent);
+
+            Console.WriteLine(string.Join(" → ", itineraire));
+            Console.WriteLine($"Longueur totale: {CalculerLongueurTotaleCircuit(circuit)}");
+            Console.ResetColor();
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"Impossible de trouver un circuit eulérien: {ex.Message}");
+            Console.ResetColor();
+        }
     }
 }

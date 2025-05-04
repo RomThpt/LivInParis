@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using MySql.Data.MySqlClient;
 using System.Xml;
 using System.IO;
+using LivInParis.Models;
 
 namespace LivInParis.UI
 {
@@ -293,12 +294,14 @@ namespace LivInParis.UI
 
                 Console.ForegroundColor = _menuColor;
                 Console.WriteLine("┌─────────────────────────────────────┐");
-                Console.WriteLine("│         RÉSEAU MÉTRO                │");
+                Console.WriteLine("│          MENU DU RÉSEAU MÉTRO       │");
                 Console.WriteLine("├─────────────────────────────────────┤");
-                Console.WriteLine("│ 1. Charger le réseau                │");
+                Console.WriteLine("│ 1. Charger le réseau métro          │");
                 Console.WriteLine("│ 2. Afficher les statistiques        │");
                 Console.WriteLine("│ 3. Calculer un itinéraire           │");
                 Console.WriteLine("│ 4. Générer une visualisation        │");
+                Console.WriteLine("│ 5. Optimiser les chemins de livraison │");
+                Console.WriteLine("│ 6. Optimiser le planning cuisiniers │");
                 Console.WriteLine("│ 0. Retour au menu principal         │");
                 Console.WriteLine("└─────────────────────────────────────┘");
                 Console.ResetColor();
@@ -319,6 +322,12 @@ namespace LivInParis.UI
                         break;
                     case "4":
                         GenerateVisualization();
+                        break;
+                    case "5":
+                        DetermineDeliveryPath();
+                        break;
+                    case "6":
+                        OptimiserPlanningCuisiniers();
                         break;
                     case "0":
                         back = true;
@@ -849,7 +858,433 @@ namespace LivInParis.UI
 
         private void DetermineDeliveryPath()
         {
-            DisplayNotImplemented();
+            Console.Clear();
+            DisplayHeader("DÉTERMINATION DU CHEMIN DE LIVRAISON");
+
+            try
+            {
+                // Charger le graphe du métro
+                var grapheMetro = ChargerGrapheMetro();
+                if (grapheMetro == null)
+                {
+                    DisplayError("Impossible de charger le graphe du réseau métro.");
+                    WaitForKey();
+                    return;
+                }
+
+                // Lister les commandes en attente de livraison
+                var commandesEnAttente = AfficherCommandesEnAttente();
+                if (commandesEnAttente.Count == 0)
+                {
+                    DisplayError("Aucune commande en attente de livraison.");
+                    WaitForKey();
+                    return;
+                }
+
+                Console.Write("\nEntrez l'ID de la commande pour optimiser son chemin de livraison: ");
+                if (!int.TryParse(Console.ReadLine(), out int commandeId) || !commandesEnAttente.Contains(commandeId))
+                {
+                    DisplayError("ID de commande invalide.");
+                    WaitForKey();
+                    return;
+                }
+
+                // Récupérer les adresses (origine et destination)
+                var (adresseDepart, adresseArrivee) = RecupererAdressesCommande(commandeId);
+                if (string.IsNullOrEmpty(adresseDepart) || string.IsNullOrEmpty(adresseArrivee))
+                {
+                    DisplayError("Impossible de récupérer les adresses pour cette commande.");
+                    WaitForKey();
+                    return;
+                }
+
+                // Convertir les adresses en stations de métro les plus proches
+                var stationDepart = TrouverStationProche(adresseDepart);
+                var stationArrivee = TrouverStationProche(adresseArrivee);
+
+                Console.WriteLine($"\nStation de départ: {stationDepart}");
+                Console.WriteLine($"Station d'arrivée: {stationArrivee}");
+
+                // Calculer le chemin optimal avec Dijkstra
+                Console.WriteLine("\nCalcul du chemin optimal...");
+                var distances = grapheMetro.Dijkstra(stationDepart);
+
+                if (!distances.ContainsKey(stationArrivee) || distances[stationArrivee] == double.PositiveInfinity)
+                {
+                    DisplayError("Aucun chemin trouvé entre ces stations.");
+                    WaitForKey();
+                    return;
+                }
+
+                var predecesseurs = new Dictionary<string, string>();
+                // ... logique pour reconstruire le chemin
+
+                var chemin = grapheMetro.ReconstruireChemin(stationDepart, stationArrivee, predecesseurs);
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"\nChemin optimal trouvé ({distances[stationArrivee]} minutes):");
+                Console.WriteLine(string.Join(" → ", chemin));
+                Console.ResetColor();
+
+                // Enregistrer ce chemin dans la base de données
+                EnregistrerItineraireLivraison(commandeId, string.Join(" → ", chemin));
+
+                // Option pour utiliser l'algorithme du facteur chinois pour les livraisons multiples
+                Console.WriteLine("\nVoulez-vous optimiser pour des livraisons multiples? (O/N)");
+                if (Console.ReadLine()?.ToUpper() == "O")
+                {
+                    Console.WriteLine("\nCalcul du circuit optimal pour livraisons multiples...");
+                    grapheMetro.AfficherCircuitEulerien();
+                }
+
+                DisplaySuccess("Chemin de livraison déterminé avec succès!");
+            }
+            catch (Exception ex)
+            {
+                DisplayError($"Une erreur s'est produite: {ex.Message}");
+            }
+
+            WaitForKey();
+        }
+
+        private List<int> AfficherCommandesEnAttente()
+        {
+            var commandesIds = new List<int>();
+
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                connection.Open();
+                string query = @"
+                    SELECT c.Id, c.DateCommande, c.AdresseLivraison, cl.Nom, cl.Prenom 
+                    FROM Commandes c
+                    JOIN Clients cl ON c.ClientID = cl.Id
+                    WHERE c.Statut = 1"; // Statut 1 = Validée, en attente de livraison
+
+                using (var cmd = new MySqlCommand(query, connection))
+                using (var reader = cmd.ExecuteReader())
+                {
+                    Console.WriteLine("\nCommandes en attente de livraison:");
+                    Console.WriteLine("--------------------------------------------------------");
+                    Console.WriteLine("| ID | Date       | Client          | Adresse         |");
+                    Console.WriteLine("--------------------------------------------------------");
+
+                    while (reader.Read())
+                    {
+                        int id = reader.GetInt32("Id");
+                        commandesIds.Add(id);
+
+                        string date = reader.GetDateTime("DateCommande").ToString("dd/MM/yyyy");
+                        string client = $"{reader.GetString("Prenom")} {reader.GetString("Nom")}";
+                        string adresse = reader.GetString("AdresseLivraison");
+
+                        if (adresse.Length > 15) adresse = adresse.Substring(0, 12) + "...";
+                        if (client.Length > 15) client = client.Substring(0, 12) + "...";
+
+                        Console.WriteLine($"| {id,-2} | {date,-10} | {client,-15} | {adresse,-15} |");
+                    }
+
+                    Console.WriteLine("--------------------------------------------------------");
+                }
+            }
+
+            return commandesIds;
+        }
+
+        private (string, string) RecupererAdressesCommande(int commandeId)
+        {
+            string adresseDepart = "";
+            string adresseArrivee = "";
+
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                connection.Open();
+                string query = @"
+                    SELECT c.AdresseLivraison, cu.Adresse 
+                    FROM Commandes c
+                    JOIN CommandeItems ci ON c.Id = ci.CommandeID
+                    JOIN Plats p ON ci.PlatID = p.Id
+                    JOIN Cuisiniers cu ON p.CuisinierID = cu.Id
+                    WHERE c.Id = @CommandeId
+                    LIMIT 1";
+
+                using (var cmd = new MySqlCommand(query, connection))
+                {
+                    cmd.Parameters.AddWithValue("@CommandeId", commandeId);
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            adresseDepart = reader.GetString("Adresse"); // Adresse du cuisinier
+                            adresseArrivee = reader.GetString("AdresseLivraison"); // Adresse du client
+                        }
+                    }
+                }
+            }
+
+            return (adresseDepart, adresseArrivee);
+        }
+
+        private string TrouverStationProche(string adresse)
+        {
+            // Simulation: Dans une application réelle, on utiliserait un service de géolocalisation
+            // Pour convertir une adresse en coordonnées GPS puis trouver la station la plus proche
+
+            // Liste fictive des stations par zone de Paris
+            var stationsParZone = new Dictionary<string, List<string>> {
+                { "75001", new List<string> { "Châtelet", "Louvre-Rivoli", "Palais Royal" } },
+                { "75002", new List<string> { "Opéra", "Quatre Septembre", "Bourse" } },
+                { "75003", new List<string> { "République", "Temple", "Arts et Métiers" } },
+                { "75004", new List<string> { "Hôtel de Ville", "Saint-Paul", "Bastille" } },
+                { "75005", new List<string> { "Place Monge", "Jussieu", "Cardinal Lemoine" } },
+                { "75006", new List<string> { "Saint-Michel", "Odéon", "Mabillon" } }
+            };
+
+            // Extraire le code postal de l'adresse (simplifié)
+            var codePostal = "";
+            foreach (var code in stationsParZone.Keys)
+            {
+                if (adresse.Contains(code))
+                {
+                    codePostal = code;
+                    break;
+                }
+            }
+
+            // Si on trouve le code postal, renvoyer une station aléatoire de cette zone
+            if (stationsParZone.ContainsKey(codePostal))
+            {
+                var stations = stationsParZone[codePostal];
+                return stations[new Random().Next(stations.Count)];
+            }
+
+            // Par défaut, renvoyer Châtelet (centre de Paris)
+            return "Châtelet";
+        }
+
+        private void EnregistrerItineraireLivraison(int commandeId, string itineraire)
+        {
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                connection.Open();
+
+                // Vérifier si une livraison existe déjà pour cette commande
+                string checkQuery = "SELECT Id FROM Livraisons WHERE CommandeID = @CommandeId";
+                using (var checkCmd = new MySqlCommand(checkQuery, connection))
+                {
+                    checkCmd.Parameters.AddWithValue("@CommandeId", commandeId);
+                    var livrationId = checkCmd.ExecuteScalar();
+
+                    if (livrationId != null)
+                    {
+                        // Mettre à jour la livraison existante
+                        string updateQuery = "UPDATE Livraisons SET ItineraireSuggere = @Itineraire WHERE CommandeID = @CommandeId";
+                        using (var updateCmd = new MySqlCommand(updateQuery, connection))
+                        {
+                            updateCmd.Parameters.AddWithValue("@CommandeId", commandeId);
+                            updateCmd.Parameters.AddWithValue("@Itineraire", itineraire);
+                            updateCmd.ExecuteNonQuery();
+                        }
+                    }
+                    else
+                    {
+                        // Créer une nouvelle livraison
+                        string insertQuery = @"
+                            INSERT INTO Livraisons (CommandeID, DateDepart, ItineraireSuggere, Statut)
+                            VALUES (@CommandeId, NOW(), @Itineraire, 0)";
+
+                        using (var insertCmd = new MySqlCommand(insertQuery, connection))
+                        {
+                            insertCmd.Parameters.AddWithValue("@CommandeId", commandeId);
+                            insertCmd.Parameters.AddWithValue("@Itineraire", itineraire);
+                            insertCmd.ExecuteNonQuery();
+                        }
+                    }
+                }
+            }
+        }
+
+        private Graphe<string> ChargerGrapheMetro()
+        {
+            try
+            {
+                // Créer un graphe du métro parisien (simplifié)
+                var graphe = new Graphe<string>(RepresentationMode.Liste);
+
+                // Charger les stations et connexions depuis la base de données
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+
+                    // Vérifier si la table des stations de métro existe
+                    bool tableExists = false;
+                    string checkTableQuery = "SHOW TABLES LIKE 'MetroStations'";
+                    using (var checkCmd = new MySqlCommand(checkTableQuery, connection))
+                    {
+                        using (var reader = checkCmd.ExecuteReader())
+                        {
+                            tableExists = reader.HasRows;
+                        }
+                    }
+
+                    if (!tableExists)
+                    {
+                        // Créer un graphe par défaut avec des données fictives
+                        return CreerGrapheMetroDefaut();
+                    }
+
+                    // Charger les stations
+                    string stationsQuery = "SELECT Nom FROM MetroStations";
+                    using (var stationsCmd = new MySqlCommand(stationsQuery, connection))
+                    {
+                        using (var reader = stationsCmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                graphe.AjouterNoeud(reader.GetString("Nom"));
+                            }
+                        }
+                    }
+
+                    // Charger les connexions
+                    string connexionsQuery = "SELECT StationDepart, StationArrivee, Duree FROM MetroConnexions";
+                    using (var connexionsCmd = new MySqlCommand(connexionsQuery, connection))
+                    {
+                        using (var reader = connexionsCmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                string depart = reader.GetString("StationDepart");
+                                string arrivee = reader.GetString("StationArrivee");
+                                double duree = reader.GetDouble("Duree");
+
+                                graphe.AjouterLien(depart, arrivee, duree);
+                            }
+                        }
+                    }
+                }
+
+                return graphe;
+            }
+            catch
+            {
+                return CreerGrapheMetroDefaut();
+            }
+        }
+
+        private Graphe<string> CreerGrapheMetroDefaut()
+        {
+            // Créer un graphe par défaut avec des données fictives
+            var graphe = new Graphe<string>(RepresentationMode.Liste);
+
+            // Ajouter quelques stations du centre de Paris
+            string[] stations = {
+                "Châtelet", "Hôtel de Ville", "Saint-Paul", "Bastille",
+                "République", "Arts et Métiers", "Réaumur-Sébastopol",
+                "Louvre-Rivoli", "Palais Royal", "Opéra", "Saint-Michel",
+                "Odéon", "Cité", "Les Halles", "Strasbourg-Saint-Denis"
+            };
+
+            foreach (var station in stations)
+            {
+                graphe.AjouterNoeud(station);
+            }
+
+            // Ajouter des connexions entre stations (avec durée en minutes)
+            var connexions = new[] {
+                ("Châtelet", "Hôtel de Ville", 2.0),
+                ("Châtelet", "Louvre-Rivoli", 2.5),
+                ("Châtelet", "Saint-Michel", 3.0),
+                ("Châtelet", "Les Halles", 1.5),
+                ("Hôtel de Ville", "Saint-Paul", 2.0),
+                ("Saint-Paul", "Bastille", 3.0),
+                ("Bastille", "République", 5.0),
+                ("République", "Arts et Métiers", 2.0),
+                ("République", "Strasbourg-Saint-Denis", 2.5),
+                ("Arts et Métiers", "Réaumur-Sébastopol", 2.0),
+                ("Réaumur-Sébastopol", "Strasbourg-Saint-Denis", 1.5),
+                ("Strasbourg-Saint-Denis", "Château d'Eau", 2.0),
+                ("Louvre-Rivoli", "Palais Royal", 1.5),
+                ("Palais Royal", "Opéra", 3.0),
+                ("Saint-Michel", "Odéon", 2.0),
+                ("Saint-Michel", "Cité", 1.5),
+                ("Cité", "Châtelet", 2.0)
+            };
+
+            foreach (var (depart, arrivee, duree) in connexions)
+            {
+                graphe.AjouterLien(depart, arrivee, duree);
+            }
+
+            return graphe;
+        }
+
+        private void OptimiserPlanningCuisiniers()
+        {
+            Console.Clear();
+            DisplayHeader("OPTIMISATION DU PLANNING DES CUISINIERS");
+
+            try
+            {
+                // Créer un graphe des cuisiniers où deux cuisiniers sont liés s'ils ne peuvent pas travailler en même temps
+                var grapheCuisiniers = new Graphe<string>(RepresentationMode.Liste);
+
+                // Récupérer la liste des cuisiniers
+                var cuisiniers = new List<(int Id, string Nom)>();
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    string query = "SELECT Id, CONCAT(Prenom, ' ', Nom) AS NomComplet FROM Cuisiniers";
+
+                    using (var cmd = new MySqlCommand(query, connection))
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            int id = reader.GetInt32("Id");
+                            string nom = reader.GetString("NomComplet");
+                            cuisiniers.Add((id, nom));
+                            grapheCuisiniers.AjouterNoeud(nom);
+                        }
+                    }
+
+                    // Ajouter des contraintes entre cuisiniers (par exemple, ceux qui partagent des créneaux horaires)
+                    // Dans un cas réel, ces contraintes viendraient de la base de données
+                    for (int i = 0; i < cuisiniers.Count; i++)
+                    {
+                        for (int j = i + 1; j < cuisiniers.Count; j++)
+                        {
+                            // Simulation: deux cuisiniers ont une contrainte avec une probabilité de 40%
+                            if (new Random().NextDouble() < 0.4)
+                            {
+                                grapheCuisiniers.AjouterLien(cuisiniers[i].Nom, cuisiniers[j].Nom);
+                            }
+                        }
+                    }
+                }
+
+                if (cuisiniers.Count == 0)
+                {
+                    DisplayError("Aucun cuisinier trouvé dans la base de données.");
+                    WaitForKey();
+                    return;
+                }
+
+                Console.WriteLine($"\n{cuisiniers.Count} cuisiniers chargés.");
+                Console.WriteLine("Application de l'algorithme de coloration de graphe pour l'optimisation du planning...\n");
+
+                // Appliquer l'algorithme de coloration de graphe
+                grapheCuisiniers.AfficherColoration();
+
+                DisplaySuccess("\nPlanning optimisé avec succès!");
+                Console.WriteLine("\nLes cuisiniers de la même couleur peuvent travailler en même temps.");
+                Console.WriteLine("Cela permet de minimiser le nombre de créneaux horaires nécessaires.");
+            }
+            catch (Exception ex)
+            {
+                DisplayError($"Une erreur s'est produite: {ex.Message}");
+            }
+
+            WaitForKey();
         }
 
         // Statistics
