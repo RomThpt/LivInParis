@@ -156,6 +156,8 @@ namespace LivInParis.UI
                 Console.WriteLine("│ 4. Historique clients               │");
                 Console.WriteLine("│ 5. Plats par fréquence              │");
                 Console.WriteLine("│ 6. Plat du jour                     │");
+                Console.WriteLine("│ 7. Ajouter un plat                  │");
+                Console.WriteLine("│ 8. Modifier un plat                 │");
                 Console.WriteLine("│ 0. Retour au menu principal         │");
                 Console.WriteLine("└─────────────────────────────────────┘");
                 Console.ResetColor();
@@ -182,6 +184,12 @@ namespace LivInParis.UI
                         break;
                     case "6":
                         DisplayDishOfTheDay();
+                        break;
+                    case "7":
+                        AddMeal();
+                        break;
+                    case "8":
+                        ModifyMeal();
                         break;
                     case "0":
                         back = true;
@@ -3552,6 +3560,333 @@ namespace LivInParis.UI
                                     reader["PrixTotal"],
                                     statut);
                             }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DisplayError($"Erreur: {ex.Message}");
+            }
+
+            WaitForKey();
+        }
+
+        private void AddMeal()
+        {
+            Console.Clear();
+            DisplayHeader("AJOUTER UN PLAT");
+
+            try
+            {
+                // 1. Sélectionner le cuisinier
+                Console.WriteLine("Sélection du cuisinier:");
+                var cuisiniers = new List<(int Id, string Nom)>();
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    string query = "SELECT Id, Nom, Prenom FROM Cuisiniers ORDER BY Nom, Prenom";
+                    using (var cmd = new MySqlCommand(query, connection))
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            cuisiniers.Add((
+                                reader.GetInt32("Id"),
+                                $"{reader.GetString("Prenom")} {reader.GetString("Nom")}"
+                            ));
+                        }
+                    }
+                }
+
+                if (cuisiniers.Count == 0)
+                {
+                    DisplayError("Aucun cuisinier disponible.");
+                    WaitForKey();
+                    return;
+                }
+
+                for (int i = 0; i < cuisiniers.Count; i++)
+                {
+                    Console.WriteLine($"{i + 1}. {cuisiniers[i].Nom}");
+                }
+
+                Console.Write("\nVotre choix: ");
+                if (!int.TryParse(Console.ReadLine(), out int choixCuisinier) ||
+                    choixCuisinier < 1 || choixCuisinier > cuisiniers.Count)
+                {
+                    DisplayError("Choix invalide.");
+                    WaitForKey();
+                    return;
+                }
+
+                var cuisinierSelectionne = cuisiniers[choixCuisinier - 1];
+
+                // 2. Saisir les informations du plat
+                Console.Write("\nNom du plat: ");
+                string nom = Console.ReadLine() ?? "";
+
+                Console.Write("Prix par personne: ");
+                if (!decimal.TryParse(Console.ReadLine(), out decimal prix))
+                {
+                    DisplayError("Prix invalide.");
+                    WaitForKey();
+                    return;
+                }
+
+                Console.Write("Nombre de personnes: ");
+                if (!int.TryParse(Console.ReadLine(), out int nbPersonnes))
+                {
+                    DisplayError("Nombre de personnes invalide.");
+                    WaitForKey();
+                    return;
+                }
+
+                Console.Write("Date de préparation (JJ/MM/AAAA): ");
+                if (!DateTime.TryParseExact(Console.ReadLine(), "dd/MM/yyyy",
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime datePrep))
+                {
+                    DisplayError("Date invalide.");
+                    WaitForKey();
+                    return;
+                }
+
+                Console.Write("Date d'expiration (JJ/MM/AAAA): ");
+                if (!DateTime.TryParseExact(Console.ReadLine(), "dd/MM/yyyy",
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime dateExp))
+                {
+                    DisplayError("Date invalide.");
+                    WaitForKey();
+                    return;
+                }
+
+                Console.Write("Nationalité de la cuisine: ");
+                string nationalite = Console.ReadLine() ?? "";
+
+                Console.WriteLine("\nCatégorie du plat:");
+                Console.WriteLine("1. Entrée");
+                Console.WriteLine("2. Plat principal");
+                Console.WriteLine("3. Dessert");
+                Console.Write("Votre choix: ");
+                if (!int.TryParse(Console.ReadLine(), out int categorie) || categorie < 1 || categorie > 3)
+                {
+                    DisplayError("Catégorie invalide.");
+                    WaitForKey();
+                    return;
+                }
+
+                // 3. Insérer le plat dans la base de données
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    string query = @"
+                        INSERT INTO Plats (
+                            CuisinierId, Nom, PrixParPersonne, 
+                            NombrePersonnes, DatePreparation, DateExpiration,
+                            NationaliteCuisine, Categorie
+                        ) VALUES (
+                            @cuisinierId, @nom, @prix, 
+                            @nbPersonnes, @datePrep, @dateExp,
+                            @nationalite, @categorie
+                        )";
+
+                    using (var cmd = new MySqlCommand(query, connection))
+                    {
+                        cmd.Parameters.AddWithValue("@cuisinierId", cuisinierSelectionne.Id);
+                        cmd.Parameters.AddWithValue("@nom", nom);
+                        cmd.Parameters.AddWithValue("@prix", prix);
+                        cmd.Parameters.AddWithValue("@nbPersonnes", nbPersonnes);
+                        cmd.Parameters.AddWithValue("@datePrep", datePrep);
+                        cmd.Parameters.AddWithValue("@dateExp", dateExp);
+                        cmd.Parameters.AddWithValue("@nationalite", nationalite);
+                        cmd.Parameters.AddWithValue("@categorie", categorie);
+
+                        int result = cmd.ExecuteNonQuery();
+                        if (result > 0)
+                        {
+                            DisplaySuccess("Plat ajouté avec succès!");
+                        }
+                        else
+                        {
+                            DisplayError("Erreur lors de l'ajout du plat.");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DisplayError($"Erreur: {ex.Message}");
+            }
+
+            WaitForKey();
+        }
+
+        private void ModifyMeal()
+        {
+            Console.Clear();
+            DisplayHeader("MODIFIER UN PLAT");
+
+            try
+            {
+                // 1. Afficher la liste des plats
+                var plats = new List<(int Id, string Nom, string Cuisinier)>();
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    string query = @"
+                        SELECT p.Id, p.Nom, CONCAT(c.Prenom, ' ', c.Nom) as Cuisinier
+                        FROM Plats p
+                        JOIN Cuisiniers c ON p.CuisinierId = c.Id
+                        ORDER BY p.Nom";
+
+                    using (var cmd = new MySqlCommand(query, connection))
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            plats.Add((
+                                reader.GetInt32("Id"),
+                                reader.GetString("Nom"),
+                                reader.GetString("Cuisinier")
+                            ));
+                        }
+                    }
+                }
+
+                if (plats.Count == 0)
+                {
+                    DisplayError("Aucun plat disponible.");
+                    WaitForKey();
+                    return;
+                }
+
+                Console.WriteLine("Liste des plats:");
+                for (int i = 0; i < plats.Count; i++)
+                {
+                    Console.WriteLine($"{i + 1}. {plats[i].Nom} (par {plats[i].Cuisinier})");
+                }
+
+                Console.Write("\nChoisissez un plat à modifier: ");
+                if (!int.TryParse(Console.ReadLine(), out int choix) ||
+                    choix < 1 || choix > plats.Count)
+                {
+                    DisplayError("Choix invalide.");
+                    WaitForKey();
+                    return;
+                }
+
+                var platSelectionne = plats[choix - 1];
+
+                // 2. Afficher les champs modifiables
+                Console.WriteLine("\nChamps modifiables (laissez vide pour conserver la valeur actuelle):");
+                Console.Write("Nouveau nom: ");
+                string nom = Console.ReadLine() ?? "";
+
+                Console.Write("Nouveau prix par personne: ");
+                string prixStr = Console.ReadLine();
+                decimal? prix = null;
+                if (!string.IsNullOrEmpty(prixStr) && decimal.TryParse(prixStr, out decimal prixValue))
+                {
+                    prix = prixValue;
+                }
+
+                Console.Write("Nouveau nombre de personnes: ");
+                string nbPersonnesStr = Console.ReadLine();
+                int? nbPersonnes = null;
+                if (!string.IsNullOrEmpty(nbPersonnesStr) && int.TryParse(nbPersonnesStr, out int nbPersonnesValue))
+                {
+                    nbPersonnes = nbPersonnesValue;
+                }
+
+                Console.Write("Nouvelle date d'expiration (JJ/MM/AAAA): ");
+                string dateExpStr = Console.ReadLine();
+                DateTime? dateExp = null;
+                if (!string.IsNullOrEmpty(dateExpStr) &&
+                    DateTime.TryParseExact(dateExpStr, "dd/MM/yyyy",
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime dateExpValue))
+                {
+                    dateExp = dateExpValue;
+                }
+
+                Console.Write("Nouvelle nationalité: ");
+                string nationalite = Console.ReadLine() ?? "";
+
+                Console.WriteLine("\nNouvelle catégorie du plat (laissez vide pour ne pas modifier):");
+                Console.WriteLine("1. Entrée");
+                Console.WriteLine("2. Plat principal");
+                Console.WriteLine("3. Dessert");
+                Console.Write("Votre choix: ");
+                string categorieStr = Console.ReadLine();
+                int? categorie = null;
+                if (!string.IsNullOrEmpty(categorieStr) && int.TryParse(categorieStr, out int categorieValue) &&
+                    categorieValue >= 1 && categorieValue <= 3)
+                {
+                    categorie = categorieValue;
+                }
+
+                // 3. Mettre à jour le plat
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    var updateFields = new List<string>();
+                    var parameters = new Dictionary<string, object>();
+
+                    if (!string.IsNullOrEmpty(nom))
+                    {
+                        updateFields.Add("Nom = @nom");
+                        parameters.Add("@nom", nom);
+                    }
+                    if (prix.HasValue)
+                    {
+                        updateFields.Add("PrixParPersonne = @prix");
+                        parameters.Add("@prix", prix.Value);
+                    }
+                    if (nbPersonnes.HasValue)
+                    {
+                        updateFields.Add("NombrePersonnes = @nbPersonnes");
+                        parameters.Add("@nbPersonnes", nbPersonnes.Value);
+                    }
+                    if (dateExp.HasValue)
+                    {
+                        updateFields.Add("DateExpiration = @dateExp");
+                        parameters.Add("@dateExp", dateExp.Value);
+                    }
+                    if (!string.IsNullOrEmpty(nationalite))
+                    {
+                        updateFields.Add("NationaliteCuisine = @nationalite");
+                        parameters.Add("@nationalite", nationalite);
+                    }
+                    if (categorie.HasValue)
+                    {
+                        updateFields.Add("Categorie = @categorie");
+                        parameters.Add("@categorie", categorie.Value);
+                    }
+
+                    if (updateFields.Count == 0)
+                    {
+                        DisplayError("Aucune modification effectuée.");
+                        WaitForKey();
+                        return;
+                    }
+
+                    string query = $"UPDATE Plats SET {string.Join(", ", updateFields)} WHERE Id = @id";
+                    parameters.Add("@id", platSelectionne.Id);
+
+                    using (var cmd = new MySqlCommand(query, connection))
+                    {
+                        foreach (var param in parameters)
+                        {
+                            cmd.Parameters.AddWithValue(param.Key, param.Value);
+                        }
+
+                        int result = cmd.ExecuteNonQuery();
+                        if (result > 0)
+                        {
+                            DisplaySuccess("Plat modifié avec succès!");
+                        }
+                        else
+                        {
+                            DisplayError("Erreur lors de la modification du plat.");
                         }
                     }
                 }
