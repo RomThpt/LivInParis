@@ -1,0 +1,60 @@
+[
+  {
+    "id": 1,
+    "nom": "1",
+    "categorie": "Entree",
+    "cuisinierID": 1,
+    "nationaliteCuisine": "1",
+    "ingredientsPhares": [
+      "1"
+    ],
+    "regimesAlimentaires": [
+      "1"
+    ],
+    "nombrePersonnes": 1,
+    "datePreparation": "2025-05-07T07:19:44",
+    "dateExpiration": "2025-05-08T07:19:51",
+    "prixParPersonne": 1.00,
+    "photoUrl": "1",
+    "estDisponible": true,
+    "cuisinier": {
+      "id": 0,
+      "nom": "Dubois",
+      "prenom": "Marie",
+      "email": null,
+      "adresse": null,
+      "noteMoyenne": 0,
+      "dateInscription": "0001-01-01T00:00:00",
+      "plats": []
+    },
+    "commandeItems": []
+  },
+  {
+    "id": 2,
+    "nom": "d",
+    "categorie": "Entree",
+    "cuisinierID": 1,
+    "nationaliteCuisine": "d",
+    "ingredientsPhares": [],
+    "regimesAlimentaires": [
+      "d"
+    ],
+    "nombrePersonnes": 1,
+    "datePreparation": "2025-05-07T07:21:47",
+    "dateExpiration": "2025-05-08T07:21:55",
+    "prixParPersonne": 1.00,
+    "photoUrl": null,
+    "estDisponible": true,
+    "cuisinier": {
+      "id": 0,
+      "nom": "Dubois",
+      "prenom": "Marie",
+      "email": null,
+      "adresse": null,
+      "noteMoyenne": 0,
+      "dateInscription": "0001-01-01T00:00:00",
+      "plats": []
+    },
+    "commandeItems": []
+  }
+]

@@ -863,7 +863,8 @@ namespace LivInParis
             Console.WriteLine();
             Console.WriteLine("1. Créer une nouvelle commande");
             Console.WriteLine("2. Valider une commande");
-            Console.WriteLine("3. Consulter l'historique des commandes");
+            Console.WriteLine("3. Gérer les livraisons");
+            Console.WriteLine("4. Consulter l'historique des commandes");
             Console.WriteLine("0. Retour au menu principal");
             Console.WriteLine();
             Console.Write("Votre choix: ");
@@ -879,6 +880,9 @@ namespace LivInParis
                     ValiderCommande(dbService);
                     break;
                 case "3":
+                    GererLivraisons(dbService);
+                    break;
+                case "4":
                     ConsulterHistoriqueCommandes(dbService);
                     break;
                 case "0":
@@ -890,100 +894,69 @@ namespace LivInParis
             }
         }
 
-        static void CreerNouvelleCommande(DatabaseService dbService)
+        static void GererLivraisons(DatabaseService dbService)
         {
             Console.Clear();
             Console.WriteLine("┌───────────────────────────────────────┐");
-            Console.WriteLine("│       CRÉATION D'UNE COMMANDE         │");
+            Console.WriteLine("│         GESTION DES LIVRAISONS        │");
             Console.WriteLine("└───────────────────────────────────────┘");
 
             try
             {
-                // 1. Sélectionner un client
-                Console.WriteLine("Sélection du client:");
-
                 using (var connection = new MySqlConnection(
                     $"Server={SERVER};Database={DATABASE};Uid={ADMIN_USER};Pwd={ADMIN_PASSWORD};"))
                 {
                     connection.Open();
 
-                    // Récupérer la liste des clients
-                    var clients = new List<(int Id, string Nom, string Prenom, string Adresse)>();
-                    using (var cmd = new MySqlCommand("SELECT Id, Nom, Prenom, Adresse FROM Clients ORDER BY Nom", connection))
+                    // Récupérer les livraisons en cours
+                    var livraisons = new List<(int CommandeId, string Client, DateTime DateLivraison, StatutLivraison Statut)>();
+                    string query = @"
+                        SELECT c.Id, cl.Nom, cl.Prenom, c.DateLivraisonPrevue, l.Statut
+                        FROM Commandes c
+                        JOIN Clients cl ON c.ClientID = cl.Id
+                        JOIN Livraisons l ON c.Id = l.CommandeID
+                        WHERE c.Statut = @StatutCommande 
+                        AND l.Statut IN (@StatutPlanifiee, @StatutEnCours)
+                        ORDER BY c.DateLivraisonPrevue";
+
+                    using (var cmd = new MySqlCommand(query, connection))
                     {
+                        cmd.Parameters.AddWithValue("@StatutCommande", (int)StatutCommande.Confirmee);
+                        cmd.Parameters.AddWithValue("@StatutPlanifiee", (int)StatutLivraison.Planifiee);
+                        cmd.Parameters.AddWithValue("@StatutEnCours", (int)StatutLivraison.EnCours);
+
                         using (var reader = cmd.ExecuteReader())
                         {
                             while (reader.Read())
                             {
-                                clients.Add((
+                                livraisons.Add((
                                     reader.GetInt32("Id"),
-                                    reader.GetString("Nom"),
-                                    reader.GetString("Prenom"),
-                                    reader.GetString("Adresse")
+                                    $"{reader.GetString("Prenom")} {reader.GetString("Nom")}",
+                                    reader.GetDateTime("DateLivraisonPrevue"),
+                                    (StatutLivraison)reader.GetInt32("Statut")
                                 ));
                             }
                         }
                     }
 
-                    if (clients.Count == 0)
+                    if (livraisons.Count == 0)
                     {
-                        Console.WriteLine("Aucun client n'est disponible. Impossible de créer une commande.");
+                        Console.WriteLine("Aucune livraison en cours.");
                         Console.WriteLine("Appuyez sur une touche pour continuer...");
                         Console.ReadKey();
                         return;
                     }
 
-                    for (int i = 0; i < clients.Count; i++)
+                    Console.WriteLine("\nLivraisons en cours:");
+                    for (int i = 0; i < livraisons.Count; i++)
                     {
-                        Console.WriteLine($"{i + 1}. {clients[i].Prenom} {clients[i].Nom}");
+                        var livraison = livraisons[i];
+                        Console.WriteLine($"{i + 1}. Commande #{livraison.CommandeId} - Client: {livraison.Client} - Livraison prévue: {livraison.DateLivraison:dd/MM/yyyy} - Statut: {livraison.Statut}");
                     }
 
-                    Console.Write("Votre choix: ");
-                    if (!int.TryParse(Console.ReadLine(), out int indexClient) ||
-                        indexClient < 1 || indexClient > clients.Count)
-                    {
-                        Console.WriteLine("Choix de client invalide.");
-                        Console.WriteLine("Appuyez sur une touche pour continuer...");
-                        Console.ReadKey();
-                        return;
-                    }
-
-                    var clientSelectionne = clients[indexClient - 1];
-
-                    // 2. Créer la commande
-                    var commande = new Commande
-                    {
-                        ClientID = clientSelectionne.Id,
-                        DateCommande = DateTime.Now,
-                        Statut = StatutCommande.EnAttente,
-                        Items = new List<CommandeItem>()
-                    };
-
-                    // 3. Configurer l'adresse de livraison
-                    Console.WriteLine("\nAdresse de livraison:");
-                    Console.WriteLine($"1. Utiliser l'adresse du client: {clientSelectionne.Adresse}");
-                    Console.WriteLine("2. Spécifier une autre adresse");
-                    Console.Write("Votre choix: ");
-
-                    string choixAdresse = Console.ReadLine();
-                    if (choixAdresse == "1")
-                    {
-                        commande.AdresseLivraison = clientSelectionne.Adresse;
-                    }
-                    else if (choixAdresse == "2")
-                    {
-                        Console.Write("Nouvelle adresse de livraison: ");
-                        string nouvelleAdresse = Console.ReadLine();
-                        if (string.IsNullOrWhiteSpace(nouvelleAdresse))
-                        {
-                            Console.WriteLine("L'adresse ne peut pas être vide.");
-                            Console.WriteLine("Appuyez sur une touche pour continuer...");
-                            Console.ReadKey();
-                            return;
-                        }
-                        commande.AdresseLivraison = nouvelleAdresse;
-                    }
-                    else
+                    Console.Write("\nSélectionner une livraison à mettre à jour (0 pour annuler): ");
+                    if (!int.TryParse(Console.ReadLine(), out int indexLivraison) ||
+                        indexLivraison < 0 || indexLivraison > livraisons.Count)
                     {
                         Console.WriteLine("Choix invalide.");
                         Console.WriteLine("Appuyez sur une touche pour continuer...");
@@ -991,118 +964,98 @@ namespace LivInParis
                         return;
                     }
 
-                    // 4. Date de livraison prévue
-                    Console.Write("\nJours avant livraison (1-7): ");
-                    if (!int.TryParse(Console.ReadLine(), out int joursLivraison) ||
-                        joursLivraison < 1 || joursLivraison > 7)
+                    if (indexLivraison == 0) return;
+
+                    var livraisonSelectionnee = livraisons[indexLivraison - 1];
+
+                    Console.WriteLine("\nChoisir le nouveau statut:");
+                    Console.WriteLine("1. En cours de livraison");
+                    Console.WriteLine("2. Livraison terminée");
+                    Console.Write("Votre choix: ");
+
+                    string choixStatut = Console.ReadLine();
+                    StatutLivraison nouveauStatut;
+                    StatutCommande nouveauStatutCommande;
+
+                    switch (choixStatut)
                     {
-                        Console.WriteLine("Nombre de jours invalide.");
-                        Console.WriteLine("Appuyez sur une touche pour continuer...");
-                        Console.ReadKey();
-                        return;
+                        case "1":
+                            nouveauStatut = StatutLivraison.EnCours;
+                            nouveauStatutCommande = StatutCommande.EnLivraison;
+                            break;
+                        case "2":
+                            nouveauStatut = StatutLivraison.Terminee;
+                            nouveauStatutCommande = StatutCommande.Livree;
+                            break;
+                        default:
+                            Console.WriteLine("Choix invalide.");
+                            Console.WriteLine("Appuyez sur une touche pour continuer...");
+                            Console.ReadKey();
+                            return;
                     }
-                    commande.DateLivraisonPrevue = DateTime.Now.AddDays(joursLivraison);
 
-                    // 5. Ajouter un plat à la commande
-                    Console.WriteLine("\nAjout d'un plat à la commande:");
-
-                    // Récupérer la liste des plats disponibles
-                    var plats = new List<(int Id, string Nom, decimal Prix)>();
-                    using (var cmd = new MySqlCommand("SELECT Id, Nom, PrixParPersonne FROM Plats WHERE EstDisponible = 1", connection))
+                    // Mettre à jour le statut de la livraison et de la commande
+                    using (var transaction = connection.BeginTransaction())
                     {
-                        using (var reader = cmd.ExecuteReader())
+                        try
                         {
-                            while (reader.Read())
+                            // Mettre à jour la livraison
+                            string updateLivraison = @"
+                                UPDATE Livraisons 
+                                SET Statut = @StatutLivraison,
+                                    DateArrivee = CASE WHEN @StatutLivraison = @StatutTerminee THEN NOW() ELSE NULL END
+                                WHERE CommandeID = @CommandeId";
+
+                            using (var cmd = new MySqlCommand(updateLivraison, connection, transaction))
                             {
-                                plats.Add((
-                                    reader.GetInt32("Id"),
-                                    reader.GetString("Nom"),
-                                    reader.GetDecimal("PrixParPersonne")
-                                ));
+                                cmd.Parameters.AddWithValue("@StatutLivraison", (int)nouveauStatut);
+                                cmd.Parameters.AddWithValue("@StatutTerminee", (int)StatutLivraison.Terminee);
+                                cmd.Parameters.AddWithValue("@CommandeId", livraisonSelectionnee.CommandeId);
+                                cmd.ExecuteNonQuery();
                             }
+
+                            // Mettre à jour la commande
+                            string updateCommande = @"
+                                UPDATE Commandes 
+                                SET Statut = @StatutCommande
+                                WHERE Id = @CommandeId";
+
+                            using (var cmd = new MySqlCommand(updateCommande, connection, transaction))
+                            {
+                                cmd.Parameters.AddWithValue("@StatutCommande", (int)nouveauStatutCommande);
+                                cmd.Parameters.AddWithValue("@CommandeId", livraisonSelectionnee.CommandeId);
+                                cmd.ExecuteNonQuery();
+                            }
+
+                            // Ajouter dans l'historique
+                            string insertHistorique = @"
+                                INSERT INTO HistoriqueCommandes (CommandeID, ActionDate, Statut, Commentaire)
+                                VALUES (@CommandeId, NOW(), @StatutCommande, @Commentaire)";
+
+                            using (var cmd = new MySqlCommand(insertHistorique, connection, transaction))
+                            {
+                                cmd.Parameters.AddWithValue("@CommandeId", livraisonSelectionnee.CommandeId);
+                                cmd.Parameters.AddWithValue("@StatutCommande", (int)nouveauStatutCommande);
+                                cmd.Parameters.AddWithValue("@Commentaire",
+                                    nouveauStatut == StatutLivraison.Terminee ?
+                                    "Livraison terminée" : "Livraison en cours");
+                                cmd.ExecuteNonQuery();
+                            }
+
+                            transaction.Commit();
+                            Console.WriteLine("Mise à jour effectuée avec succès!");
                         }
-                    }
-
-                    if (plats.Count == 0)
-                    {
-                        Console.WriteLine("Aucun plat disponible. Impossible de créer la commande.");
-                        Console.WriteLine("Appuyez sur une touche pour continuer...");
-                        Console.ReadKey();
-                        return;
-                    }
-
-                    Console.WriteLine("Plats disponibles:");
-                    for (int i = 0; i < plats.Count; i++)
-                    {
-                        Console.WriteLine($"{i + 1}. {plats[i].Nom} - {plats[i].Prix:C} par personne");
-                    }
-
-                    Console.Write("Sélectionner un plat: ");
-                    if (!int.TryParse(Console.ReadLine(), out int indexPlat) ||
-                        indexPlat < 1 || indexPlat > plats.Count)
-                    {
-                        Console.WriteLine("Choix de plat invalide.");
-                        Console.WriteLine("Appuyez sur une touche pour continuer...");
-                        Console.ReadKey();
-                        return;
-                    }
-
-                    var platSelectionne = plats[indexPlat - 1];
-
-                    // Quantité
-                    Console.Write($"Quantité de \"{platSelectionne.Nom}\" (1-10): ");
-                    if (!int.TryParse(Console.ReadLine(), out int quantite) ||
-                        quantite < 1 || quantite > 10)
-                    {
-                        Console.WriteLine("Quantité invalide.");
-                        Console.WriteLine("Appuyez sur une touche pour continuer...");
-                        Console.ReadKey();
-                        return;
-                    }
-
-                    // Ajouter l'item à la commande
-                    var commandeItem = new CommandeItem
-                    {
-                        PlatID = platSelectionne.Id,
-                        Quantite = quantite,
-                        PrixUnitaire = platSelectionne.Prix
-                    };
-
-                    commande.Items.Add(commandeItem);
-                    commande.PrixTotal = commandeItem.PrixUnitaire * commandeItem.Quantite;
-
-                    // 6. Commentaires
-                    Console.Write("\nCommentaires (facultatif): ");
-                    string commentaires = Console.ReadLine();
-                    if (!string.IsNullOrWhiteSpace(commentaires))
-                    {
-                        commande.Commentaires = commentaires;
-                    }
-
-                    // 7. Résumé de la commande
-                    Console.WriteLine("\nRésumé de la commande:");
-                    Console.WriteLine($"Client: {clientSelectionne.Prenom} {clientSelectionne.Nom}");
-                    Console.WriteLine($"Adresse de livraison: {commande.AdresseLivraison}");
-                    Console.WriteLine($"Date de livraison prévue: {commande.DateLivraisonPrevue:dd/MM/yyyy}");
-                    Console.WriteLine($"Plat: {platSelectionne.Nom} x{quantite} = {commande.PrixTotal:C}");
-
-                    // 8. Confirmation
-                    Console.Write("\nConfirmer la commande? (O/N): ");
-                    if (Console.ReadLine().Trim().ToUpper().StartsWith("O"))
-                    {
-                        // Enregistrer la commande
-                        int commandeID = dbService.CreerCommande(commande);
-                        Console.WriteLine($"Commande créée avec succès (ID: {commandeID}).");
-                    }
-                    else
-                    {
-                        Console.WriteLine("Création de commande annulée.");
+                        catch (Exception ex)
+                        {
+                            transaction.Rollback();
+                            throw new Exception($"Erreur lors de la mise à jour: {ex.Message}");
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Erreur lors de la création de la commande: {ex.Message}");
+                Console.WriteLine($"Erreur: {ex.Message}");
             }
 
             Console.WriteLine("Appuyez sur une touche pour continuer...");
@@ -1382,7 +1335,7 @@ namespace LivInParis
                         JOIN Cuisiniers cu ON p.CuisinierID = cu.Id
                         JOIN Livraisons l ON c.Id = l.CommandeID
                         WHERE c.Statut = @Statut AND l.Statut = @StatutLivraison
-                        GROUP BY c.Id
+                        GROUP BY c.Id, c.ClientID, cl.Nom, cl.Prenom, p.CuisinierID, cu.Nom, cu.Prenom
                         ORDER BY c.DateCommande DESC";
 
                     using (var cmd = new MySqlCommand(query, connection))
@@ -2359,6 +2312,225 @@ namespace LivInParis
             catch (Exception ex)
             {
                 Console.WriteLine($"Erreur lors de l'importation: {ex.Message}");
+            }
+
+            Console.WriteLine("Appuyez sur une touche pour continuer...");
+            Console.ReadKey();
+        }
+
+        static void CreerNouvelleCommande(DatabaseService dbService)
+        {
+            Console.Clear();
+            Console.WriteLine("┌───────────────────────────────────────┐");
+            Console.WriteLine("│       CRÉATION D'UNE COMMANDE         │");
+            Console.WriteLine("└───────────────────────────────────────┘");
+
+            try
+            {
+                // 1. Sélectionner un client
+                Console.WriteLine("Sélection du client:");
+
+                using (var connection = new MySqlConnection(
+                    $"Server={SERVER};Database={DATABASE};Uid={ADMIN_USER};Pwd={ADMIN_PASSWORD};"))
+                {
+                    connection.Open();
+
+                    // Récupérer la liste des clients
+                    var clients = new List<(int Id, string Nom, string Prenom, string Adresse)>();
+                    using (var cmd = new MySqlCommand("SELECT Id, Nom, Prenom, Adresse FROM Clients ORDER BY Nom", connection))
+                    {
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                clients.Add((
+                                    reader.GetInt32("Id"),
+                                    reader.GetString("Nom"),
+                                    reader.GetString("Prenom"),
+                                    reader.GetString("Adresse")
+                                ));
+                            }
+                        }
+                    }
+
+                    if (clients.Count == 0)
+                    {
+                        Console.WriteLine("Aucun client n'est disponible. Impossible de créer une commande.");
+                        Console.WriteLine("Appuyez sur une touche pour continuer...");
+                        Console.ReadKey();
+                        return;
+                    }
+
+                    for (int i = 0; i < clients.Count; i++)
+                    {
+                        Console.WriteLine($"{i + 1}. {clients[i].Prenom} {clients[i].Nom}");
+                    }
+
+                    Console.Write("Votre choix: ");
+                    if (!int.TryParse(Console.ReadLine(), out int indexClient) ||
+                        indexClient < 1 || indexClient > clients.Count)
+                    {
+                        Console.WriteLine("Choix de client invalide.");
+                        Console.WriteLine("Appuyez sur une touche pour continuer...");
+                        Console.ReadKey();
+                        return;
+                    }
+
+                    var clientSelectionne = clients[indexClient - 1];
+
+                    // 2. Créer la commande
+                    var commande = new Commande
+                    {
+                        ClientID = clientSelectionne.Id,
+                        DateCommande = DateTime.Now,
+                        Statut = StatutCommande.EnAttente,
+                        Items = new List<CommandeItem>()
+                    };
+
+                    // 3. Configurer l'adresse de livraison
+                    Console.WriteLine("\nAdresse de livraison:");
+                    Console.WriteLine($"1. Utiliser l'adresse du client: {clientSelectionne.Adresse}");
+                    Console.WriteLine("2. Spécifier une autre adresse");
+                    Console.Write("Votre choix: ");
+
+                    string choixAdresse = Console.ReadLine();
+                    if (choixAdresse == "1")
+                    {
+                        commande.AdresseLivraison = clientSelectionne.Adresse;
+                    }
+                    else if (choixAdresse == "2")
+                    {
+                        Console.Write("Nouvelle adresse de livraison: ");
+                        string nouvelleAdresse = Console.ReadLine();
+                        if (string.IsNullOrWhiteSpace(nouvelleAdresse))
+                        {
+                            Console.WriteLine("L'adresse ne peut pas être vide.");
+                            Console.WriteLine("Appuyez sur une touche pour continuer...");
+                            Console.ReadKey();
+                            return;
+                        }
+                        commande.AdresseLivraison = nouvelleAdresse;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Choix invalide.");
+                        Console.WriteLine("Appuyez sur une touche pour continuer...");
+                        Console.ReadKey();
+                        return;
+                    }
+
+                    // 4. Date de livraison prévue
+                    Console.Write("\nJours avant livraison (1-7): ");
+                    if (!int.TryParse(Console.ReadLine(), out int joursLivraison) ||
+                        joursLivraison < 1 || joursLivraison > 7)
+                    {
+                        Console.WriteLine("Nombre de jours invalide.");
+                        Console.WriteLine("Appuyez sur une touche pour continuer...");
+                        Console.ReadKey();
+                        return;
+                    }
+                    commande.DateLivraisonPrevue = DateTime.Now.AddDays(joursLivraison);
+
+                    // 5. Ajouter un plat à la commande
+                    Console.WriteLine("\nAjout d'un plat à la commande:");
+
+                    // Récupérer la liste des plats disponibles
+                    var plats = new List<(int Id, string Nom, decimal Prix)>();
+                    using (var cmd = new MySqlCommand("SELECT Id, Nom, PrixParPersonne FROM Plats WHERE EstDisponible = 1", connection))
+                    {
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                plats.Add((
+                                    reader.GetInt32("Id"),
+                                    reader.GetString("Nom"),
+                                    reader.GetDecimal("PrixParPersonne")
+                                ));
+                            }
+                        }
+                    }
+
+                    if (plats.Count == 0)
+                    {
+                        Console.WriteLine("Aucun plat disponible. Impossible de créer la commande.");
+                        Console.WriteLine("Appuyez sur une touche pour continuer...");
+                        Console.ReadKey();
+                        return;
+                    }
+
+                    Console.WriteLine("Plats disponibles:");
+                    for (int i = 0; i < plats.Count; i++)
+                    {
+                        Console.WriteLine($"{i + 1}. {plats[i].Nom} - {plats[i].Prix:C} par personne");
+                    }
+
+                    Console.Write("Sélectionner un plat: ");
+                    if (!int.TryParse(Console.ReadLine(), out int indexPlat) ||
+                        indexPlat < 1 || indexPlat > plats.Count)
+                    {
+                        Console.WriteLine("Choix de plat invalide.");
+                        Console.WriteLine("Appuyez sur une touche pour continuer...");
+                        Console.ReadKey();
+                        return;
+                    }
+
+                    var platSelectionne = plats[indexPlat - 1];
+
+                    // Quantité
+                    Console.Write($"Quantité de \"{platSelectionne.Nom}\" (1-10): ");
+                    if (!int.TryParse(Console.ReadLine(), out int quantite) ||
+                        quantite < 1 || quantite > 10)
+                    {
+                        Console.WriteLine("Quantité invalide.");
+                        Console.WriteLine("Appuyez sur une touche pour continuer...");
+                        Console.ReadKey();
+                        return;
+                    }
+
+                    // Ajouter l'item à la commande
+                    var commandeItem = new CommandeItem
+                    {
+                        PlatID = platSelectionne.Id,
+                        Quantite = quantite,
+                        PrixUnitaire = platSelectionne.Prix
+                    };
+
+                    commande.Items.Add(commandeItem);
+                    commande.PrixTotal = commandeItem.PrixUnitaire * commandeItem.Quantite;
+
+                    // 6. Commentaires
+                    Console.Write("\nCommentaires (facultatif): ");
+                    string commentaires = Console.ReadLine();
+                    if (!string.IsNullOrWhiteSpace(commentaires))
+                    {
+                        commande.Commentaires = commentaires;
+                    }
+
+                    // 7. Résumé de la commande
+                    Console.WriteLine("\nRésumé de la commande:");
+                    Console.WriteLine($"Client: {clientSelectionne.Prenom} {clientSelectionne.Nom}");
+                    Console.WriteLine($"Adresse de livraison: {commande.AdresseLivraison}");
+                    Console.WriteLine($"Date de livraison prévue: {commande.DateLivraisonPrevue:dd/MM/yyyy}");
+                    Console.WriteLine($"Plat: {platSelectionne.Nom} x{quantite} = {commande.PrixTotal:C}");
+
+                    // 8. Confirmation
+                    Console.Write("\nConfirmer la commande? (O/N): ");
+                    if (Console.ReadLine().Trim().ToUpper().StartsWith("O"))
+                    {
+                        // Enregistrer la commande
+                        int commandeID = dbService.CreerCommande(commande);
+                        Console.WriteLine($"Commande créée avec succès (ID: {commandeID}).");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Création de commande annulée.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Erreur lors de la création de la commande: {ex.Message}");
             }
 
             Console.WriteLine("Appuyez sur une touche pour continuer...");

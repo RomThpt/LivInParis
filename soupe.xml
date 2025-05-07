@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ArrayOfPlat xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Plat>
+    <Id>1</Id>
+    <Nom>Kd</Nom>
+    <Categorie>Entree</Categorie>
+    <CuisinierID>1</CuisinierID>
+    <NationaliteCuisine>fre</NationaliteCuisine>
+    <IngredientsPhares>
+      <string>3</string>
+      <string>3</string>
+      <string>3</string>
+      <string>3</string>
+      <string>3</string>
+      <string>3</string>
+    </IngredientsPhares>
+    <RegimesAlimentaires>
+      <string>dcd</string>
+    </RegimesAlimentaires>
+    <NombrePersonnes>3</NombrePersonnes>
+    <DatePreparation>2025-05-04T15:26:06</DatePreparation>
+    <DateExpiration>2025-05-07T15:26:15</DateExpiration>
+    <PrixParPersonne>3.00</PrixParPersonne>
+    <EstDisponible>true</EstDisponible>
+    <Cuisinier>
+      <Id>0</Id>
+      <Nom>Dupont</Nom>
+      <Prenom>Jean</Prenom>
+      <NoteMoyenne>0</NoteMoyenne>
+      <DateInscription>0001-01-01T00:00:00</DateInscription>
+      <Plats />
+    </Cuisinier>
+    <CommandeItems />
+  </Plat>
+  <Plat>
+    <Id>2</Id>
+    <Nom>soupe</Nom>
+    <Categorie>Entree</Categorie>
+    <CuisinierID>2</CuisinierID>
+    <NationaliteCuisine>francaise</NationaliteCuisine>
+    <IngredientsPhares>
+      <string>tomate poivron oignons</string>
+    </IngredientsPhares>
+    <RegimesAlimentaires>
+      <string>végan</string>
+    </RegimesAlimentaires>
+    <NombrePersonnes>2</NombrePersonnes>
+    <DatePreparation>2025-05-05T17:28:51</DatePreparation>
+    <DateExpiration>2025-05-10T17:30:58</DateExpiration>
+    <PrixParPersonne>6.00</PrixParPersonne>
+    <EstDisponible>true</EstDisponible>
+    <Cuisinier>
+      <Id>0</Id>
+      <Nom>Martin</Nom>
+      <Prenom>Sophie</Prenom>
+      <NoteMoyenne>0</NoteMoyenne>
+      <DateInscription>0001-01-01T00:00:00</DateInscription>
+      <Plats />
+    </Cuisinier>
+    <CommandeItems />
+  </Plat>
+</ArrayOfPlat>
