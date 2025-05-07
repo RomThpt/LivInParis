@@ -3,6 +3,9 @@ using System.Collections.Generic;
 
 namespace LivInParis.Models
 {
+    /// <summary>
+    /// Représente une commande de repas
+    /// </summary>
     public enum StatutCommande
     {
         EnAttente,
@@ -28,8 +31,17 @@ namespace LivInParis.Models
         public Client? Client { get; set; }
         public List<CommandeItem> Items { get; set; } = new List<CommandeItem>();
         public Livraison? Livraison { get; set; }
+
+        public Commande()
+        {
+            DateCommande = DateTime.Now;
+            Statut = StatutCommande.EnAttente;
+        }
     }
 
+    /// <summary>
+    /// Représente un item dans une commande
+    /// </summary>
     public class CommandeItem
     {
         public int Id { get; set; }

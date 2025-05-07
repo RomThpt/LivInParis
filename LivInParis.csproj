@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <PackageReference Include="MySql.Data" Version="9.2.0" />
+    <PackageReference Include="QuickGraph" Version="3.6.61119.7" />
     <PackageReference Include="SkiaSharp" Version="2.88.7" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.7.1" />
     <PackageReference Include="MSTest.TestAdapter" Version="2.2.10" />

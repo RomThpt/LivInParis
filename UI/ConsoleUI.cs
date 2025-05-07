@@ -4,6 +4,12 @@ using MySql.Data.MySqlClient;
 using System.Xml;
 using System.IO;
 using LivInParis.Models;
+using System.Linq;
+using System.Globalization;
+using System.Text;
+using System.Diagnostics;
+using SkiaSharp;
+using LivInParis.Services;  /// Ajout de la référence pour SerializationService
 
 namespace LivInParis.UI
 {
@@ -37,6 +43,7 @@ namespace LivInParis.UI
                 Console.WriteLine("│ 3. Gestion des commandes            │");
                 Console.WriteLine("│ 4. Statistiques                     │");
                 Console.WriteLine("│ 5. Gestion du réseau métro          │");
+                Console.WriteLine("│ 6. Import/Export de données         │");
                 Console.WriteLine("│ 0. Quitter                          │");
                 Console.WriteLine("└─────────────────────────────────────┘");
                 Console.ResetColor();
@@ -60,6 +67,9 @@ namespace LivInParis.UI
                         break;
                     case "5":
                         DisplayMetroMenu();
+                        break;
+                    case "6":
+                        DisplayImportExportMenu();
                         break;
                     case "0":
                         exit = true;
@@ -328,6 +338,62 @@ namespace LivInParis.UI
                         break;
                     case "6":
                         OptimiserPlanningCuisiniers();
+                        break;
+                    case "0":
+                        back = true;
+                        break;
+                    default:
+                        DisplayError("Option invalide. Veuillez réessayer.");
+                        WaitForKey();
+                        break;
+                }
+            }
+        }
+
+        private void DisplayImportExportMenu()
+        {
+            bool back = false;
+            while (!back)
+            {
+                Console.Clear();
+                DisplayHeader("IMPORT/EXPORT DE DONNÉES");
+
+                Console.ForegroundColor = _menuColor;
+                Console.WriteLine("┌─────────────────────────────────────┐");
+                Console.WriteLine("│       IMPORT/EXPORT DE DONNÉES      │");
+                Console.WriteLine("├─────────────────────────────────────┤");
+                Console.WriteLine("│ 1. Exporter les plats en JSON       │");
+                Console.WriteLine("│ 2. Importer les plats depuis JSON   │");
+                Console.WriteLine("│ 3. Exporter les plats en XML        │");
+                Console.WriteLine("│ 4. Importer les plats depuis XML    │");
+                Console.WriteLine("│ 5. Exporter les commandes en JSON   │");
+                Console.WriteLine("│ 6. Importer les commandes depuis JSON│");
+                Console.WriteLine("│ 0. Retour au menu principal         │");
+                Console.WriteLine("└─────────────────────────────────────┘");
+                Console.ResetColor();
+
+                Console.Write("\nVotre choix: ");
+                string choice = Console.ReadLine();
+
+                switch (choice)
+                {
+                    case "1":
+                        ExportPlatsToJSON();
+                        break;
+                    case "2":
+                        ImportPlatsFromJSON();
+                        break;
+                    case "3":
+                        ExportPlatsToXML();
+                        break;
+                    case "4":
+                        ImportPlatsFromXML();
+                        break;
+                    case "5":
+                        ExportCommandesToJSON();
+                        break;
+                    case "6":
+                        ImportCommandesFromJSON();
                         break;
                     case "0":
                         back = true;
@@ -843,7 +909,231 @@ namespace LivInParis.UI
         // Order operations
         private void CreateOrder()
         {
-            DisplayNotImplemented();
+            Console.Clear();
+            DisplayHeader("CRÉATION D'UNE COMMANDE");
+
+            try
+            {
+                /// 1. Sélectionner un client
+                Console.WriteLine("Sélection du client:");
+
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+
+                    /// Récupérer la liste des clients
+                    var clients = new List<(int Id, string Nom, string Prenom, string Adresse)>();
+                    using (var cmd = new MySqlCommand("SELECT Id, LastName, FirstName, Address FROM Clients ORDER BY LastName", connection))
+                    {
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                clients.Add((
+                                    reader.GetInt32("Id"),
+                                    reader.GetString("LastName"),
+                                    reader.GetString("FirstName"),
+                                    reader.GetString("Address")
+                                ));
+                            }
+                        }
+                    }
+
+                    if (clients.Count == 0)
+                    {
+                        DisplayError("Aucun client n'est disponible. Impossible de créer une commande.");
+                        WaitForKey();
+                        return;
+                    }
+
+                    for (int i = 0; i < clients.Count; i++)
+                    {
+                        Console.WriteLine($"{i + 1}. {clients[i].Prenom} {clients[i].Nom}");
+                    }
+
+                    Console.Write("Votre choix: ");
+                    if (!int.TryParse(Console.ReadLine(), out int indexClient) ||
+                        indexClient < 1 || indexClient > clients.Count)
+                    {
+                        DisplayError("Choix de client invalide.");
+                        WaitForKey();
+                        return;
+                    }
+
+                    var clientSelectionne = clients[indexClient - 1];
+
+                    /// 2. Sélectionner la station de métro la plus proche pour la livraison
+                    Console.WriteLine("\nSélection de la station de métro pour la livraison:");
+                    var stations = ChargerStationsMetro();
+
+                    /// Afficher les 5 stations les plus proches
+                    var stationsProches = stations.OrderBy(s =>
+                        CalculerDistance(s.Latitude, s.Longitude, 48.8566, 2.3522)) /// Coordonnées du centre de Paris
+                        .Take(10)
+                        .ToList();
+
+                    for (int i = 0; i < stationsProches.Count; i++)
+                    {
+                        Console.WriteLine($"{i + 1}. {stationsProches[i].Nom}");
+                    }
+
+                    Console.Write("\nChoisissez la station de métro la plus proche de votre adresse: ");
+                    if (!int.TryParse(Console.ReadLine(), out int indexStation) ||
+                        indexStation < 1 || indexStation > stationsProches.Count)
+                    {
+                        DisplayError("Choix de station invalide.");
+                        WaitForKey();
+                        return;
+                    }
+
+                    var stationLivraison = stationsProches[indexStation - 1];
+
+                    /// 3. Charger le graphe du métro et afficher le chemin optimal
+                    var grapheMetro = ChargerGrapheMetro();
+                    if (grapheMetro != null)
+                    {
+                        Console.WriteLine("\nCalcul du chemin de livraison optimal...");
+
+                        /// Trouver la station la plus proche du restaurant (simulé ici avec Châtelet comme point central)
+                        var stationDepart = "Châtelet";
+
+                        /// Calculer le chemin optimal avec Dijkstra
+                        var distances = grapheMetro.Dijkstra(stationDepart);
+                        var predecesseurs = new Dictionary<string, string>();
+
+                        if (!distances.ContainsKey(stationLivraison.Nom) || distances[stationLivraison.Nom] == double.PositiveInfinity)
+                        {
+                            DisplayError("Aucun chemin trouvé entre ces stations.");
+                            WaitForKey();
+                            return;
+                        }
+
+                        var chemin = grapheMetro.ReconstruireChemin(stationDepart, stationLivraison.Nom, predecesseurs);
+
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.WriteLine($"\nChemin optimal trouvé ({Math.Round(distances[stationLivraison.Nom])} minutes):");
+                        Console.WriteLine(string.Join(" → ", chemin));
+                        Console.ResetColor();
+                    }
+
+                    /// 4. Sélectionner les plats
+                    Console.WriteLine("\nSélection des plats:");
+                    var plats = new List<(int PlatId, int Quantite)>();
+                    using (var cmd = new MySqlCommand("SELECT Id, Name, PricePerPerson FROM Meals WHERE ExpirationDate > NOW()", connection))
+                    {
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                plats.Add((
+                                    reader.GetInt32("Id"),
+                                    reader.GetInt32("PricePerPerson")
+                                ));
+                            }
+                        }
+                    }
+
+                    if (plats.Count == 0)
+                    {
+                        DisplayError("Aucun plat disponible.");
+                        WaitForKey();
+                        return;
+                    }
+
+                    var commandeItems = new List<(int PlatId, int Quantite)>();
+                    decimal totalPrix = 0;
+
+                    while (true)
+                    {
+                        Console.WriteLine("\nPlats disponibles:");
+                        for (int i = 0; i < plats.Count; i++)
+                        {
+                            Console.WriteLine($"{i + 1}. {plats[i].PlatId} - {plats[i].Quantite} personnes");
+                        }
+                        Console.WriteLine("0. Terminer la sélection");
+
+                        Console.Write("Votre choix: ");
+                        if (!int.TryParse(Console.ReadLine(), out int choixPlat) || choixPlat < 0 || choixPlat > plats.Count)
+                        {
+                            DisplayError("Choix invalide.");
+                            continue;
+                        }
+
+                        if (choixPlat == 0)
+                            break;
+
+                        Console.Write("Quantité: ");
+                        if (!int.TryParse(Console.ReadLine(), out int quantite) || quantite <= 0)
+                        {
+                            DisplayError("Quantité invalide.");
+                            continue;
+                        }
+
+                        var platSelectionne = plats[choixPlat - 1];
+                        commandeItems.Add((platSelectionne.PlatId, quantite));
+                        totalPrix += platSelectionne.Quantite * platSelectionne.PlatId;
+                    }
+
+                    if (commandeItems.Count == 0)
+                    {
+                        DisplayError("Aucun plat sélectionné.");
+                        WaitForKey();
+                        return;
+                    }
+
+                    /// 5. Confirmer la commande
+                    Console.WriteLine($"\nTotal de la commande: {totalPrix:C}");
+                    Console.WriteLine($"Point de livraison: Station {stationLivraison.Nom}");
+                    Console.Write("Confirmer la commande? (O/N): ");
+
+                    if (Console.ReadLine().Trim().ToUpper().StartsWith("O"))
+                    {
+                        /// Créer la commande
+                        string insertOrderQuery = @"
+                            INSERT INTO Orders (ClientId, TotalPrice, DeliveryAddress, Status) 
+                            VALUES (@clientId, @totalPrice, @deliveryAddress, 'pending')";
+
+                        int orderId;
+                        using (var cmd = new MySqlCommand(insertOrderQuery, connection))
+                        {
+                            cmd.Parameters.AddWithValue("@clientId", clientSelectionne.Id);
+                            cmd.Parameters.AddWithValue("@totalPrice", totalPrix);
+                            cmd.Parameters.AddWithValue("@deliveryAddress", $"Station de métro: {stationLivraison.Nom}");
+                            cmd.ExecuteNonQuery();
+                            orderId = (int)cmd.LastInsertedId;
+                        }
+
+                        /// Ajouter les items de la commande
+                        string insertOrderItemQuery = @"
+                            INSERT INTO OrderItems (OrderId, MealId, Quantity, UnitPrice) 
+                            VALUES (@orderId, @mealId, @quantity, @unitPrice)";
+
+                        foreach (var item in commandeItems)
+                        {
+                            using (var cmd = new MySqlCommand(insertOrderItemQuery, connection))
+                            {
+                                cmd.Parameters.AddWithValue("@orderId", orderId);
+                                cmd.Parameters.AddWithValue("@mealId", item.PlatId);
+                                cmd.Parameters.AddWithValue("@quantity", item.Quantite);
+                                cmd.Parameters.AddWithValue("@unitPrice", plats.First(p => p.PlatId == item.PlatId).Quantite);
+                                cmd.ExecuteNonQuery();
+                            }
+                        }
+
+                        DisplaySuccess($"Commande créée avec succès (ID: {orderId})");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Création de commande annulée.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DisplayError($"Erreur lors de la création de la commande: {ex.Message}");
+            }
+
+            WaitForKey();
         }
 
         private void ModifyOrder()
@@ -917,14 +1207,19 @@ namespace LivInParis.UI
                 }
 
                 var predecesseurs = new Dictionary<string, string>();
-                // ... logique pour reconstruire le chemin
-
                 var chemin = grapheMetro.ReconstruireChemin(stationDepart, stationArrivee, predecesseurs);
 
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"\nChemin optimal trouvé ({distances[stationArrivee]} minutes):");
+                Console.WriteLine($"\nChemin optimal trouvé ({Math.Round(distances[stationArrivee])} minutes):");
                 Console.WriteLine(string.Join(" → ", chemin));
                 Console.ResetColor();
+
+                // Add visualization option
+                Console.Write("\nVoulez-vous visualiser ce chemin sur une carte ? (O/N): ");
+                if (Console.ReadLine()?.Trim().ToUpper().StartsWith("O") == true)
+                {
+                    GenerateVisualization(chemin);
+                }
 
                 // Enregistrer ce chemin dans la base de données
                 EnregistrerItineraireLivraison(commandeId, string.Join(" → ", chemin));
@@ -1337,10 +1632,10 @@ namespace LivInParis.UI
                     return;
                 }
 
-                // Check XML format and convert if necessary
+                /// Vérifier le format XML et convertir si nécessaire
                 string tempXmlPath = ConvertXmlFormat(xmlFilePath);
 
-                // Extract connection string parameters
+                /// Extraire les paramètres de la chaîne de connexion
                 string server = GetConnectionStringParameter(_connectionString, "Server");
                 string database = GetConnectionStringParameter(_connectionString, "Database");
                 string uid = GetConnectionStringParameter(_connectionString, "Uid");
@@ -1350,7 +1645,7 @@ namespace LivInParis.UI
                 metroNetwork.InitializeDatabase();
                 metroNetwork.ImportFromXml(tempXmlPath);
 
-                // Delete temporary file if created
+                /// Supprimer le fichier temporaire s'il a été créé
                 if (tempXmlPath != xmlFilePath && File.Exists(tempXmlPath))
                 {
                     File.Delete(tempXmlPath);
@@ -1427,7 +1722,7 @@ namespace LivInParis.UI
             WaitForKey();
         }
 
-        private void GenerateVisualization()
+        private void GenerateVisualization(List<string> highlightedPath = null)
         {
             Console.Clear();
             DisplayHeader("GÉNÉRER UNE VISUALISATION");
@@ -1447,14 +1742,93 @@ namespace LivInParis.UI
                     outputFile += ".png";
                 }
 
-                Console.WriteLine($"Génération de la visualisation dans le fichier {outputFile}...");
+                using (var surface = SKSurface.Create(new SKImageInfo(1920, 1080)))
+                {
+                    var canvas = surface.Canvas;
+                    canvas.Clear(SKColors.White);
 
-                // Create a graph from database and visualize it
-                var graphe = new Models.Graphe<string>(Models.RepresentationMode.Liste);
-                // Code to load the graph from database and visualize using GraphVisualizer would go here
-                // For now, just show a success message as placeholder
+                    // Charger les stations et les connexions
+                    var stations = ChargerStationsMetro();
+                    var grapheMetro = ChargerGrapheMetro();
 
-                DisplaySuccess($"Visualisation générée dans le fichier {outputFile}!");
+                    if (grapheMetro == null || stations.Count == 0)
+                    {
+                        throw new Exception("Impossible de charger les données du métro.");
+                    }
+
+                    // Calculer les positions des stations
+                    var stationPositions = CalculerPositionsStations(stations);
+
+                    // Dessiner les connexions
+                    using (var paint = new SKPaint
+                    {
+                        Color = SKColors.Gray,
+                        StrokeWidth = 2,
+                        IsAntialias = true
+                    })
+                    {
+                        foreach (var lien in grapheMetro.Liens)
+                        {
+                            if (stationPositions.TryGetValue(lien.Noeud1.Id, out var posDepart) &&
+                                stationPositions.TryGetValue(lien.Noeud2.Id, out var posArrivee))
+                            {
+                                // Si le chemin est surligné, utiliser une couleur différente
+                                if (highlightedPath != null &&
+                                    highlightedPath.Contains(lien.Noeud1.Id) &&
+                                    highlightedPath.Contains(lien.Noeud2.Id))
+                                {
+                                    paint.Color = SKColors.Red;
+                                    paint.StrokeWidth = 4;
+                                }
+                                else
+                                {
+                                    paint.Color = SKColors.Gray;
+                                    paint.StrokeWidth = 2;
+                                }
+
+                                canvas.DrawLine(posDepart.X, posDepart.Y, posArrivee.X, posArrivee.Y, paint);
+                            }
+                        }
+                    }
+
+                    // Dessiner les stations
+                    using (var paint = new SKPaint
+                    {
+                        Color = SKColors.Blue,
+                        IsAntialias = true
+                    })
+                    {
+                        using (var textPaint = new SKPaint
+                        {
+                            Color = SKColors.Black,
+                            TextSize = 14,
+                            IsAntialias = true
+                        })
+                        {
+                            foreach (var station in stations)
+                            {
+                                if (stationPositions.TryGetValue(station.Nom, out var pos))
+                                {
+                                    // Dessiner le point de la station
+                                    canvas.DrawCircle(pos.X, pos.Y, 6, paint);
+
+                                    // Dessiner le nom de la station
+                                    canvas.DrawText(station.Nom, pos.X + 10, pos.Y - 10, textPaint);
+                                }
+                            }
+                        }
+                    }
+
+                    // Sauvegarder l'image
+                    using (var image = surface.Snapshot())
+                    using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
+                    using (var stream = File.OpenWrite(outputFile))
+                    {
+                        data.SaveTo(stream);
+                    }
+                }
+
+                DisplaySuccess($"Visualisation générée avec succès dans {outputFile}");
             }
             catch (Exception ex)
             {
@@ -1462,6 +1836,36 @@ namespace LivInParis.UI
             }
 
             WaitForKey();
+        }
+
+        private Dictionary<string, SKPoint> CalculerPositionsStations(List<Station> stations)
+        {
+            var positions = new Dictionary<string, SKPoint>();
+            const float margin = 100;
+            const float width = 1920 - 2 * margin;
+            const float height = 1080 - 2 * margin;
+
+            // Trouver les limites des coordonnées
+            float minLat = float.MaxValue, maxLat = float.MinValue;
+            float minLon = float.MaxValue, maxLon = float.MinValue;
+
+            foreach (var station in stations)
+            {
+                if (station.Latitude < minLat) minLat = station.Latitude;
+                if (station.Latitude > maxLat) maxLat = station.Latitude;
+                if (station.Longitude < minLon) minLon = station.Longitude;
+                if (station.Longitude > maxLon) maxLon = station.Longitude;
+            }
+
+            // Calculer les positions relatives
+            foreach (var station in stations)
+            {
+                float x = margin + (station.Longitude - minLon) / (maxLon - minLon) * width;
+                float y = margin + (maxLat - station.Latitude) / (maxLat - minLat) * height;
+                positions[station.Nom] = new SKPoint(x, y);
+            }
+
+            return positions;
         }
 
         // Helper method to extract connection string parameters
@@ -1528,17 +1932,17 @@ namespace LivInParis.UI
 
                 Console.WriteLine("Analyse du fichier XML...");
 
-                // Check the structure to determine if conversion is needed
+                /// Vérifier la structure pour déterminer si une conversion est nécessaire
                 var stations = doc.SelectNodes("//stations/station");
                 if (stations == null || stations.Count == 0)
                 {
-                    // Try alternate XPath
+                    /// Essayer un autre XPath
                     stations = doc.SelectNodes("//station");
                 }
 
                 Console.WriteLine($"Trouvé {stations?.Count ?? 0} stations dans le XML.");
 
-                // If format already correct (has attributes), no conversion needed
+                /// Si le format est déjà correct (a des attributs), pas besoin de conversion
                 if (stations != null && stations.Count > 0 &&
                     stations[0].Attributes["id"] != null &&
                     stations[0].Attributes["name"] != null)
@@ -1547,25 +1951,25 @@ namespace LivInParis.UI
                     return inputPath;
                 }
 
-                // Create new XML document with attribute-based format
+                /// Créer un nouveau document XML avec le format basé sur les attributs
                 XmlDocument newDoc = new XmlDocument();
                 XmlElement root = newDoc.CreateElement("metro");
                 newDoc.AppendChild(root);
 
                 Console.WriteLine("Conversion du XML au format attendu...");
 
-                // Process each station
+                /// Traiter chaque station
                 if (stations != null)
                 {
                     foreach (XmlNode station in stations)
                     {
                         XmlElement newStation = newDoc.CreateElement("station");
 
-                        // Get the ID from attribute or child element
+                        /// Obtenir l'ID à partir de l'attribut ou de l'élément enfant
                         string id = station.Attributes?["id"]?.Value;
                         if (string.IsNullOrEmpty(id))
                         {
-                            // Try to get id from child element
+                            /// Essayer d'obtenir l'id à partir de l'élément enfant
                             XmlNode idNode = station.SelectSingleNode("id");
                             if (idNode != null)
                             {
@@ -1573,12 +1977,12 @@ namespace LivInParis.UI
                             }
                             else
                             {
-                                // Use attribute directly
+                                /// Utiliser l'attribut directement
                                 id = station.InnerText;
                             }
                         }
 
-                        // If still no ID found, generate one
+                        /// Si toujours pas d'ID trouvé, en générer un
                         if (string.IsNullOrEmpty(id))
                         {
                             id = "s" + Guid.NewGuid().ToString("N").Substring(0, 8);
@@ -1586,7 +1990,7 @@ namespace LivInParis.UI
 
                         newStation.SetAttribute("id", id);
 
-                        // Get name from child element "nom"
+                        /// Obtenir le nom à partir de l'élément enfant "nom"
                         string name = null;
                         XmlNode nameNode = station.SelectSingleNode("nom");
                         if (nameNode != null && !string.IsNullOrEmpty(nameNode.InnerText))
@@ -1594,7 +1998,7 @@ namespace LivInParis.UI
                             name = nameNode.InnerText;
                         }
 
-                        // Make sure name is not null
+                        /// S'assurer que le nom n'est pas null
                         if (string.IsNullOrEmpty(name))
                         {
                             name = "Station " + id;
@@ -1603,7 +2007,7 @@ namespace LivInParis.UI
                         newStation.SetAttribute("name", name);
                         Console.WriteLine($"Station {id}: nom = {name}");
 
-                        // Get coordinates
+                        /// Obtenir les coordonnées
                         double x = 0, y = 0;
                         XmlNode latNode = station.SelectSingleNode("latitude");
                         XmlNode lonNode = station.SelectSingleNode("longitude");
@@ -1622,14 +2026,14 @@ namespace LivInParis.UI
                                 System.Globalization.CultureInfo.InvariantCulture,
                                 out double lon);
 
-                            x = lon; // Use longitude as X
-                            y = lat; // Use latitude as Y
+                            x = lon; /// Utiliser la longitude comme X
+                            y = lat; /// Utiliser la latitude comme Y
                         }
 
                         newStation.SetAttribute("x", x.ToString(System.Globalization.CultureInfo.InvariantCulture));
                         newStation.SetAttribute("y", y.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
-                        // Set default line attribute
+                        /// Définir l'attribut de ligne par défaut
                         newStation.SetAttribute("line", "1");
 
                         root.AppendChild(newStation);
@@ -1637,17 +2041,17 @@ namespace LivInParis.UI
 
                     Console.WriteLine($"Converti {stations.Count} stations avec succès.");
 
-                    // Add connections (simplified example - connect consecutive stations)
+                    /// Ajouter les connexions (exemple simplifié - connecter les stations consécutives)
                     int stationCount = stations.Count;
                     int connectionCount = 0;
 
-                    // Create connections for each line (simplified - just connect sequential stations)
+                    /// Créer des connexions pour chaque ligne (simplifié - juste connecter les stations séquentielles)
                     for (int i = 0; i < stationCount - 1; i++)
                     {
                         XmlNode station1 = stations[i];
                         XmlNode station2 = stations[i + 1];
 
-                        // Get IDs
+                        /// Obtenir les IDs
                         string id1 = station1.Attributes?["id"]?.Value;
                         if (string.IsNullOrEmpty(id1))
                         {
@@ -1662,11 +2066,11 @@ namespace LivInParis.UI
                             id2 = idNode != null ? idNode.InnerText : null;
                         }
 
-                        // If IDs are found, create connection
+                        /// Si les IDs sont trouvés, créer la connexion
                         if (!string.IsNullOrEmpty(id1) && !string.IsNullOrEmpty(id2))
                         {
-                            // Calculate distance if coordinates available
-                            double distance = 0.5; // Default distance
+                            /// Calculer la distance si les coordonnées sont disponibles
+                            double distance = 0.5; /// Distance par défaut
 
                             XmlNode lat1Node = station1.SelectSingleNode("latitude");
                             XmlNode lon1Node = station1.SelectSingleNode("longitude");
@@ -1697,8 +2101,8 @@ namespace LivInParis.UI
                                     System.Globalization.CultureInfo.InvariantCulture,
                                     out double lon2);
 
-                                // Simple distance calculation (Euclidean)
-                                distance = Math.Sqrt(Math.Pow(lon2 - lon1, 2) + Math.Pow(lat2 - lat1, 2)) * 111; // Rough km conversion
+                                /// Calcul simple de la distance (euclidienne)
+                                distance = Math.Sqrt(Math.Pow(lon2 - lon1, 2) + Math.Pow(lat2 - lat1, 2)) * 111; /// Conversion approximative en km
                             }
 
                             XmlElement connection = newDoc.CreateElement("connection");
@@ -1713,13 +2117,13 @@ namespace LivInParis.UI
                     Console.WriteLine($"Ajouté {connectionCount} connexions entre stations.");
                 }
 
-                // Save to temp file
+                /// Sauvegarder dans un fichier temporaire
                 string tempPath = Path.Combine(Path.GetTempPath(), "metro_converted.xml");
                 newDoc.Save(tempPath);
 
                 Console.WriteLine($"Fichier XML converti sauvegardé à {tempPath}");
 
-                // Debug: Validate the output file
+                /// Debug: Valider le fichier de sortie
                 try
                 {
                     XmlDocument validateDoc = new XmlDocument();
@@ -1749,8 +2153,354 @@ namespace LivInParis.UI
             {
                 Console.WriteLine($"Erreur lors de la conversion du XML: {ex.Message}");
                 Console.WriteLine(ex.StackTrace);
-                return inputPath; // Return original path if conversion fails
+                return inputPath; /// Retourner le chemin original si la conversion échoue
             }
+        }
+
+        private List<Station> ChargerStationsMetro()
+        {
+            var stations = new List<Station>();
+            var xmlDoc = new XmlDocument();
+            xmlDoc.Load("public/metro.xml");
+
+            var stationNodes = xmlDoc.SelectNodes("//station");
+            if (stationNodes != null)
+            {
+                foreach (XmlNode station in stationNodes)
+                {
+                    var id = station.Attributes?["id"]?.Value ?? station.SelectSingleNode("id")?.InnerText;
+                    var nom = station.SelectSingleNode("nom")?.InnerText;
+                    var adresse = station.SelectSingleNode("adresse")?.InnerText;
+                    var latNode = station.SelectSingleNode("latitude");
+                    var lonNode = station.SelectSingleNode("longitude");
+
+                    if (nom != null && latNode != null && lonNode != null &&
+                        float.TryParse(latNode.InnerText, NumberStyles.Any, CultureInfo.InvariantCulture, out float lat) &&
+                        float.TryParse(lonNode.InnerText, NumberStyles.Any, CultureInfo.InvariantCulture, out float lon))
+                    {
+                        stations.Add(new Station(id, nom, adresse, lat, lon));
+                    }
+                }
+            }
+
+            return stations;
+        }
+
+        private double CalculerDistance(double lat1, double lon1, double lat2, double lon2)
+        {
+            const double R = 6371; /// Rayon de la Terre en km
+            var dLat = ToRad(lat2 - lat1);
+            var dLon = ToRad(lon2 - lon1);
+            var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                    Math.Cos(ToRad(lat1)) * Math.Cos(ToRad(lat2)) *
+                    Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+            var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+            return R * c;
+        }
+
+        private double ToRad(double deg)
+        {
+            return deg * Math.PI / 180;
+        }
+
+        private void ExportPlatsToJSON()
+        {
+            Console.Clear();
+            DisplayHeader("EXPORTER LES PLATS EN JSON");
+
+            try
+            {
+                Console.Write("Chemin du fichier de sortie: ");
+                string outputPath = Console.ReadLine() ?? "plats.json";
+
+                if (!outputPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                {
+                    outputPath += ".json";
+                }
+
+                /// Récupérer les plats depuis la base de données
+                var plats = new List<Plat>();
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    string query = "SELECT * FROM Meals";
+                    using (var cmd = new MySqlCommand(query, connection))
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            plats.Add(new Plat
+                            {
+                                Id = reader.GetInt32("Id"),
+                                Nom = reader.GetString("Name"),
+                                PrixParPersonne = reader.GetDecimal("PricePerPerson"),
+                                /// Ajouter d'autres propriétés selon votre modèle
+                            });
+                        }
+                    }
+                }
+
+                /// Exporter en JSON
+                SerializationService.ExporterPlatsJSON(plats, outputPath);
+                DisplaySuccess($"Plats exportés avec succès dans {outputPath}");
+            }
+            catch (Exception ex)
+            {
+                DisplayError($"Erreur lors de l'export: {ex.Message}");
+            }
+
+            WaitForKey();
+        }
+
+        private void ImportPlatsFromJSON()
+        {
+            Console.Clear();
+            DisplayHeader("IMPORTER LES PLATS DEPUIS JSON");
+
+            try
+            {
+                Console.Write("Chemin du fichier JSON: ");
+                string? inputPath = Console.ReadLine();
+
+                if (string.IsNullOrEmpty(inputPath))
+                {
+                    DisplayError("Chemin de fichier invalide.");
+                    WaitForKey();
+                    return;
+                }
+
+                /// Importer depuis JSON
+                var plats = SerializationService.ImporterPlatsJSON(inputPath);
+
+                /// Insérer dans la base de données
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    foreach (var plat in plats)
+                    {
+                        string query = @"
+                            INSERT INTO Meals (Name, PricePerPerson) 
+                            VALUES (@name, @price)
+                            ON DUPLICATE KEY UPDATE 
+                            PricePerPerson = @price";
+
+                        using (var cmd = new MySqlCommand(query, connection))
+                        {
+                            cmd.Parameters.AddWithValue("@name", plat.Nom);
+                            cmd.Parameters.AddWithValue("@price", plat.PrixParPersonne);
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                }
+
+                DisplaySuccess($"{plats.Count} plats importés avec succès.");
+            }
+            catch (Exception ex)
+            {
+                DisplayError($"Erreur lors de l'import: {ex.Message}");
+            }
+
+            WaitForKey();
+        }
+
+        private void ExportPlatsToXML()
+        {
+            Console.Clear();
+            DisplayHeader("EXPORTER LES PLATS EN XML");
+
+            try
+            {
+                Console.Write("Chemin du fichier de sortie: ");
+                string outputPath = Console.ReadLine() ?? "plats.xml";
+
+                if (!outputPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                {
+                    outputPath += ".xml";
+                }
+
+                /// Récupérer les plats depuis la base de données
+                var plats = new List<Plat>();
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    string query = "SELECT * FROM Meals";
+                    using (var cmd = new MySqlCommand(query, connection))
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            plats.Add(new Plat
+                            {
+                                Id = reader.GetInt32("Id"),
+                                Nom = reader.GetString("Name"),
+                                PrixParPersonne = reader.GetDecimal("PricePerPerson"),
+                                /// Ajouter d'autres propriétés selon votre modèle
+                            });
+                        }
+                    }
+                }
+
+                /// Exporter en XML
+                SerializationService.ExporterPlatsXML(plats, outputPath);
+                DisplaySuccess($"Plats exportés avec succès dans {outputPath}");
+            }
+            catch (Exception ex)
+            {
+                DisplayError($"Erreur lors de l'export: {ex.Message}");
+            }
+
+            WaitForKey();
+        }
+
+        private void ImportPlatsFromXML()
+        {
+            Console.Clear();
+            DisplayHeader("IMPORTER LES PLATS DEPUIS XML");
+
+            try
+            {
+                Console.Write("Chemin du fichier XML: ");
+                string? inputPath = Console.ReadLine();
+
+                if (string.IsNullOrEmpty(inputPath))
+                {
+                    DisplayError("Chemin de fichier invalide.");
+                    WaitForKey();
+                    return;
+                }
+
+                /// Importer depuis XML
+                var plats = SerializationService.ImporterPlatsXML(inputPath);
+
+                /// Insérer dans la base de données
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    foreach (var plat in plats)
+                    {
+                        string query = @"
+                            INSERT INTO Meals (Name, PricePerPerson) 
+                            VALUES (@name, @price)
+                            ON DUPLICATE KEY UPDATE 
+                            PricePerPerson = @price";
+
+                        using (var cmd = new MySqlCommand(query, connection))
+                        {
+                            cmd.Parameters.AddWithValue("@name", plat.Nom);
+                            cmd.Parameters.AddWithValue("@price", plat.PrixParPersonne);
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                }
+
+                DisplaySuccess($"{plats.Count} plats importés avec succès.");
+            }
+            catch (Exception ex)
+            {
+                DisplayError($"Erreur lors de l'import: {ex.Message}");
+            }
+
+            WaitForKey();
+        }
+
+        private void ExportCommandesToJSON()
+        {
+            Console.Clear();
+            DisplayHeader("EXPORTER LES COMMANDES EN JSON");
+
+            try
+            {
+                Console.Write("Chemin du fichier de sortie: ");
+                string outputPath = Console.ReadLine() ?? "commandes.json";
+
+                if (!outputPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                {
+                    outputPath += ".json";
+                }
+
+                /// Récupérer les commandes depuis la base de données
+                var commandes = new List<Commande>();
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    string query = "SELECT * FROM Orders";
+                    using (var cmd = new MySqlCommand(query, connection))
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            commandes.Add(new Commande
+                            {
+                                Id = reader.GetInt32("Id"),
+                                ClientID = reader.GetInt32("ClientId"),
+                                PrixTotal = reader.GetDecimal("TotalPrice"),
+                                /// Ajouter d'autres propriétés selon votre modèle
+                            });
+                        }
+                    }
+                }
+
+                /// Exporter en JSON
+                SerializationService.ExporterCommandesJSON(commandes, outputPath);
+                DisplaySuccess($"Commandes exportées avec succès dans {outputPath}");
+            }
+            catch (Exception ex)
+            {
+                DisplayError($"Erreur lors de l'export: {ex.Message}");
+            }
+
+            WaitForKey();
+        }
+
+        private void ImportCommandesFromJSON()
+        {
+            Console.Clear();
+            DisplayHeader("IMPORTER LES COMMANDES DEPUIS JSON");
+
+            try
+            {
+                Console.Write("Chemin du fichier JSON: ");
+                string? inputPath = Console.ReadLine();
+
+                if (string.IsNullOrEmpty(inputPath))
+                {
+                    DisplayError("Chemin de fichier invalide.");
+                    WaitForKey();
+                    return;
+                }
+
+                /// Importer depuis JSON
+                var commandes = SerializationService.ImporterCommandesJSON(inputPath);
+
+                /// Insérer dans la base de données
+                using (var connection = new MySqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    foreach (var commande in commandes)
+                    {
+                        string query = @"
+                            INSERT INTO Orders (ClientId, TotalPrice) 
+                            VALUES (@clientId, @totalPrice)
+                            ON DUPLICATE KEY UPDATE 
+                            TotalPrice = @totalPrice";
+
+                        using (var cmd = new MySqlCommand(query, connection))
+                        {
+                            cmd.Parameters.AddWithValue("@clientId", commande.ClientID);
+                            cmd.Parameters.AddWithValue("@totalPrice", commande.PrixTotal);
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                }
+
+                DisplaySuccess($"{commandes.Count} commandes importées avec succès.");
+            }
+            catch (Exception ex)
+            {
+                DisplayError($"Erreur lors de l'import: {ex.Message}");
+            }
+
+            WaitForKey();
         }
     }
 }

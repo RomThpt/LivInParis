@@ -10,9 +10,9 @@ namespace LivInParis.Services
     {
         private readonly string _connectionString;
 
-        public DatabaseService(string server, string database, string username, string password)
+        public DatabaseService(string connectionString)
         {
-            _connectionString = $"Server={server};Database={database};Uid={username};Pwd={password};";
+            _connectionString = connectionString;
         }
 
         // Connecter à la base de données

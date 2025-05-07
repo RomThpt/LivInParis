@@ -1,5 +1,11 @@
+using System;
+using System.Collections.Generic;
+
 namespace LivInParis.Models;
 
+/// <summary>
+/// Représente un nœud dans le graphe du réseau de métro
+/// </summary>
 public class Noeud<T> where T : IEquatable<T>
 {
     public T Id { get; private set; }

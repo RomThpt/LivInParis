@@ -2,7 +2,13 @@ namespace LivInParis.Models;
 
 using System.Globalization;
 using System.Xml.Linq;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
+/// <summary>
+/// Représente un graphe orienté pondéré
+/// </summary>
 public class Graphe<T> where T : IEquatable<T>
 {
     public Dictionary<T, Noeud<T>> Noeuds { get; private set; }
@@ -21,6 +27,9 @@ public class Graphe<T> where T : IEquatable<T>
         }
     }
 
+    /// <summary>
+    /// Ajoute un nœud au graphe
+    /// </summary>
     public void AjouterNoeud(T id)
     {
         if (!Noeuds.ContainsKey(id))
@@ -34,6 +43,9 @@ public class Graphe<T> where T : IEquatable<T>
         }
     }
 
+    /// <summary>
+    /// Ajoute une arête pondérée entre deux nœuds
+    /// </summary>
     public void AjouterLien(T id1, T id2, double poids = 1.0)
     {
         if (Mode == RepresentationMode.Liste)
@@ -133,6 +145,9 @@ public class Graphe<T> where T : IEquatable<T>
             ParcoursProfondeurRecursif(voisin, visites);
     }
 
+    /// <summary>
+    /// Vérifie si le graphe est connexe
+    /// </summary>
     public bool EstConnexe()
     {
         if (Noeuds.Count == 0)
@@ -179,6 +194,9 @@ public class Graphe<T> where T : IEquatable<T>
         return false;
     }
 
+    /// <summary>
+    /// Implémente l'algorithme de Dijkstra pour trouver le chemin le plus court
+    /// </summary>
     public Dictionary<T, double> Dijkstra(T depart)
     {
         var distances = new Dictionary<T, double>();
@@ -290,6 +308,9 @@ public class Graphe<T> where T : IEquatable<T>
         return distances;
     }
 
+    /// <summary>
+    /// Reconstruit le chemin à partir des prédécesseurs
+    /// </summary>
     public List<T> ReconstruireChemin(T depart, T fin, Dictionary<T, T> predecesseurs)
     {
         var chemin = new List<T>();
@@ -384,6 +405,9 @@ public class Graphe<T> where T : IEquatable<T>
         return graphe;
     }
 
+    /// <summary>
+    /// Calcule la coloration du graphe
+    /// </summary>
     public Dictionary<T, int> ColorerGraphe()
     {
         var couleurs = new Dictionary<T, int>();

@@ -2,6 +2,9 @@ using System;
 
 namespace LivInParis.Models
 {
+    /// <summary>
+    /// Représente une notation donnée par un client à un cuisinier
+    /// </summary>
     public enum TypeNotation
     {
         ClientVersCuisinier,
@@ -21,5 +24,10 @@ namespace LivInParis.Models
 
         // Navigation property
         public Commande? Commande { get; set; }
+
+        public Notation()
+        {
+            DateNotation = DateTime.Now;
+        }
     }
 }
