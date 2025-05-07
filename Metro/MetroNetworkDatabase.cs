@@ -11,111 +11,183 @@ namespace LivInParis.Metro
     {
         private readonly string _connectionString;
 
-        public MetroNetworkDatabase(string connectionString)
+        public MetroNetworkDatabase(string server, string database, string uid, string password)
         {
-            _connectionString = connectionString;
+            _connectionString = $"Server={server};Database={database};Uid={uid};Pwd={password};";
         }
 
-        public void ImporterDonneesMetro(string cheminFichierXml)
+        public void InitializeDatabase()
         {
-            /// Créer les tables si elles n'existent pas
             using (var connection = new MySqlConnection(_connectionString))
             {
                 connection.Open();
-                string query = @"
-                    CREATE TABLE IF NOT EXISTS StationsMetro (
-                        Id INT AUTO_INCREMENT PRIMARY KEY,
-                        Nom VARCHAR(100) NOT NULL,
-                        Ligne VARCHAR(50),
-                        Latitude DECIMAL(10,8) NOT NULL,
-                        Longitude DECIMAL(11,8) NOT NULL
-                    );
 
-                    CREATE TABLE IF NOT EXISTS ConnexionsMetro (
-                        Id INT AUTO_INCREMENT PRIMARY KEY,
-                        StationDepartId INT NOT NULL,
-                        StationArriveeId INT NOT NULL,
-                        DureeMinutes INT NOT NULL,
-                        FOREIGN KEY (StationDepartId) REFERENCES StationsMetro(Id),
-                        FOREIGN KEY (StationArriveeId) REFERENCES StationsMetro(Id)
-                    );";
+                // Create MetroStations table if not exists
+                string createStationsTable = @"
+                    CREATE TABLE IF NOT EXISTS MetroStations (
+                        Id VARCHAR(50) PRIMARY KEY,
+                        Name VARCHAR(100) NOT NULL,
+                        Latitude DOUBLE NOT NULL,
+                        Longitude DOUBLE NOT NULL,
+                        Line VARCHAR(10) NOT NULL
+                    )";
 
-                using (var cmd = new MySqlCommand(query, connection))
+                // Create MetroConnections table if not exists
+                string createConnectionsTable = @"
+                    CREATE TABLE IF NOT EXISTS MetroConnections (
+                        Id INT AUTO_INCREMENT PRIMARY KEY,
+                        FromStationId VARCHAR(50) NOT NULL,
+                        ToStationId VARCHAR(50) NOT NULL,
+                        Distance DOUBLE NOT NULL,
+                        FOREIGN KEY (FromStationId) REFERENCES MetroStations(Id),
+                        FOREIGN KEY (ToStationId) REFERENCES MetroStations(Id)
+                    )";
+
+                using (var cmd = new MySqlCommand(createStationsTable, connection))
                 {
                     cmd.ExecuteNonQuery();
                 }
 
-                /// Charger le document XML
-                var doc = new XmlDocument();
-                doc.Load(cheminFichierXml);
-
-                /// Ouvrir la connexion à la base de données
-                using (var transaction = connection.BeginTransaction())
+                using (var cmd = new MySqlCommand(createConnectionsTable, connection))
                 {
-                    try
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+
+        public void ImportFromXml(string xmlPath)
+        {
+            var doc = new XmlDocument();
+            doc.Load(xmlPath);
+
+            using (var dbConnection = new MySqlConnection(_connectionString))
+            {
+                dbConnection.Open();
+
+                // Clear existing data
+                using (var cmd = new MySqlCommand("DELETE FROM MetroConnections; DELETE FROM MetroStations;", dbConnection))
+                {
+                    cmd.ExecuteNonQuery();
+                }
+
+                // Import stations
+                var stations = doc.SelectNodes("//station");
+                if (stations != null)
+                {
+                    foreach (XmlNode station in stations)
                     {
-                        /// Commencer la transaction pour de meilleures performances
-                        /// Effacer les données existantes
-                        using (var cmd = new MySqlCommand("DELETE FROM ConnexionsMetro; DELETE FROM StationsMetro;", connection, transaction))
+                        string id = station.Attributes?["id"]?.Value ?? "";
+                        string name = station.Attributes?["name"]?.Value ?? "";
+                        string x = station.Attributes?["x"]?.Value ?? "0";
+                        string y = station.Attributes?["y"]?.Value ?? "0";
+                        string line = station.Attributes?["line"]?.Value ?? "1";
+
+                        string insertStation = @"
+                            INSERT INTO MetroStations (Id, Name, Latitude, Longitude, Line)
+                            VALUES (@id, @name, @lat, @lon, @line)";
+
+                        using (var cmd = new MySqlCommand(insertStation, dbConnection))
                         {
+                            cmd.Parameters.AddWithValue("@id", id);
+                            cmd.Parameters.AddWithValue("@name", name);
+                            cmd.Parameters.AddWithValue("@lat", double.Parse(y));
+                            cmd.Parameters.AddWithValue("@lon", double.Parse(x));
+                            cmd.Parameters.AddWithValue("@line", line);
                             cmd.ExecuteNonQuery();
                         }
-
-                        /// Importer les stations
-                        var stations = doc.SelectNodes("//station");
-                        if (stations != null)
-                        {
-                            foreach (XmlNode station in stations)
-                            {
-                                string query = @"
-                                    INSERT INTO StationsMetro (Nom, Ligne, Latitude, Longitude)
-                                    VALUES (@Nom, @Ligne, @Latitude, @Longitude)";
-
-                                using (var cmd = new MySqlCommand(query, connection, transaction))
-                                {
-                                    cmd.Parameters.AddWithValue("@Nom", station.SelectSingleNode("nom")?.InnerText);
-                                    cmd.Parameters.AddWithValue("@Ligne", station.SelectSingleNode("ligne")?.InnerText);
-                                    cmd.Parameters.AddWithValue("@Latitude", Convert.ToDouble(station.SelectSingleNode("latitude")?.InnerText));
-                                    cmd.Parameters.AddWithValue("@Longitude", Convert.ToDouble(station.SelectSingleNode("longitude")?.InnerText));
-                                    cmd.ExecuteNonQuery();
-                                }
-                            }
-                        }
-
-                        /// Importer les connexions
-                        var connections = doc.SelectNodes("//connection");
-                        if (connections != null)
-                        {
-                            foreach (XmlNode connection in connections)
-                            {
-                                string query = @"
-                                    INSERT INTO ConnexionsMetro (StationDepartId, StationArriveeId, DureeMinutes)
-                                    SELECT 
-                                        s1.Id as StationDepartId,
-                                        s2.Id as StationArriveeId,
-                                        @DureeMinutes
-                                    FROM StationsMetro s1, StationsMetro s2
-                                    WHERE s1.Nom = @StationDepart AND s2.Nom = @StationArrivee";
-
-                                using (var cmd = new MySqlCommand(query, connection, transaction))
-                                {
-                                    cmd.Parameters.AddWithValue("@StationDepart", connection.SelectSingleNode("depart")?.InnerText);
-                                    cmd.Parameters.AddWithValue("@StationArrivee", connection.SelectSingleNode("arrivee")?.InnerText);
-                                    cmd.Parameters.AddWithValue("@DureeMinutes", Convert.ToInt32(connection.SelectSingleNode("duree")?.InnerText));
-                                    cmd.ExecuteNonQuery();
-                                }
-                            }
-                        }
-
-                        /// Valider la transaction
-                        transaction.Commit();
-                    }
-                    catch
-                    {
-                        transaction.Rollback();
-                        throw;
                     }
                 }
+
+                // Import connections
+                var connections = doc.SelectNodes("//connection");
+                if (connections != null)
+                {
+                    foreach (XmlNode connectionNode in connections)
+                    {
+                        string from = connectionNode.Attributes?["from"]?.Value ?? "";
+                        string to = connectionNode.Attributes?["to"]?.Value ?? "";
+                        string distance = connectionNode.Attributes?["distance"]?.Value ?? "0";
+
+                        string insertConnection = @"
+                            INSERT INTO MetroConnections (FromStationId, ToStationId, Distance)
+                            VALUES (@from, @to, @distance)";
+
+                        using (var cmd = new MySqlCommand(insertConnection, dbConnection))
+                        {
+                            cmd.Parameters.AddWithValue("@from", from);
+                            cmd.Parameters.AddWithValue("@to", to);
+                            cmd.Parameters.AddWithValue("@distance", double.Parse(distance));
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                }
+            }
+        }
+
+        public void PrintNetworkStats()
+        {
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                connection.Open();
+
+                // Count stations
+                string countStations = "SELECT COUNT(*) FROM MetroStations";
+                using (var cmd = new MySqlCommand(countStations, connection))
+                {
+                    int stationCount = Convert.ToInt32(cmd.ExecuteScalar());
+                    Console.WriteLine($"Nombre total de stations: {stationCount}");
+                }
+
+                // Count connections
+                string countConnections = "SELECT COUNT(*) FROM MetroConnections";
+                using (var cmd = new MySqlCommand(countConnections, connection))
+                {
+                    int connectionCount = Convert.ToInt32(cmd.ExecuteScalar());
+                    Console.WriteLine($"Nombre total de connexions: {connectionCount}");
+                }
+
+                // Average connections per station
+                string avgConnections = @"
+                    SELECT AVG(connection_count) 
+                    FROM (
+                        SELECT COUNT(*) as connection_count 
+                        FROM MetroConnections 
+                        GROUP BY FromStationId
+                    ) as counts";
+                using (var cmd = new MySqlCommand(avgConnections, connection))
+                {
+                    double avgConn = Convert.ToDouble(cmd.ExecuteScalar());
+                    Console.WriteLine($"Nombre moyen de connexions par station: {avgConn:F2}");
+                }
+            }
+        }
+
+        public void CalculateRoute(string fromStation, string toStation)
+        {
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                connection.Open();
+
+                // Verify stations exist
+                string checkStations = @"
+                    SELECT COUNT(*) 
+                    FROM MetroStations 
+                    WHERE Name IN (@from, @to)";
+                using (var cmd = new MySqlCommand(checkStations, connection))
+                {
+                    cmd.Parameters.AddWithValue("@from", fromStation);
+                    cmd.Parameters.AddWithValue("@to", toStation);
+                    int count = Convert.ToInt32(cmd.ExecuteScalar());
+                    if (count != 2)
+                    {
+                        Console.WriteLine("Une ou plusieurs stations n'existent pas.");
+                        return;
+                    }
+                }
+
+                // Simple route calculation (this is a placeholder - implement proper pathfinding)
+                Console.WriteLine($"Calcul de l'itinéraire de {fromStation} à {toStation}...");
+                Console.WriteLine("Cette fonctionnalité nécessite l'implémentation d'un algorithme de plus court chemin.");
             }
         }
 
@@ -129,13 +201,13 @@ namespace LivInParis.Metro
                     try
                     {
                         /// D'abord supprimer les connexions (à cause des contraintes de clé étrangère)
-                        using (var cmd = new MySqlCommand("DELETE FROM ConnexionsMetro;", connection, transaction))
+                        using (var cmd = new MySqlCommand("DELETE FROM MetroConnections;", connection, transaction))
                         {
                             cmd.ExecuteNonQuery();
                         }
 
                         /// Puis supprimer les stations
-                        using (var cmd = new MySqlCommand("DELETE FROM StationsMetro;", connection, transaction))
+                        using (var cmd = new MySqlCommand("DELETE FROM MetroStations;", connection, transaction))
                         {
                             cmd.ExecuteNonQuery();
                         }
@@ -157,7 +229,7 @@ namespace LivInParis.Metro
             using (var connection = new MySqlConnection(_connectionString))
             {
                 connection.Open();
-                using (var cmd = new MySqlCommand("SELECT COUNT(*) FROM StationsMetro;", connection))
+                using (var cmd = new MySqlCommand("SELECT COUNT(*) FROM MetroStations;", connection))
                 {
                     return Convert.ToInt32(cmd.ExecuteScalar());
                 }
@@ -170,7 +242,7 @@ namespace LivInParis.Metro
             using (var connection = new MySqlConnection(_connectionString))
             {
                 connection.Open();
-                using (var cmd = new MySqlCommand("SELECT COUNT(*) FROM ConnexionsMetro;", connection))
+                using (var cmd = new MySqlCommand("SELECT COUNT(*) FROM MetroConnections;", connection))
                 {
                     return Convert.ToInt32(cmd.ExecuteScalar());
                 }
@@ -184,7 +256,7 @@ namespace LivInParis.Metro
             using (var connection = new MySqlConnection(_connectionString))
             {
                 connection.Open();
-                using (var cmd = new MySqlCommand("SELECT Id FROM StationsMetro ORDER BY Id;", connection))
+                using (var cmd = new MySqlCommand("SELECT Id FROM MetroStations ORDER BY Id;", connection))
                 {
                     using (var reader = cmd.ExecuteReader())
                     {
@@ -244,13 +316,13 @@ namespace LivInParis.Metro
             {
                 connection.Open();
                 string query = @"
-                    SELECT StationArriveeId 
-                    FROM ConnexionsMetro 
-                    WHERE StationDepartId = @StationId
+                    SELECT ToStationId 
+                    FROM MetroConnections 
+                    WHERE FromStationId = @StationId
                     UNION
-                    SELECT StationDepartId 
-                    FROM ConnexionsMetro 
-                    WHERE StationArriveeId = @StationId";
+                    SELECT FromStationId 
+                    FROM MetroConnections 
+                    WHERE ToStationId = @StationId";
 
                 using (var cmd = new MySqlCommand(query, connection))
                 {
@@ -284,8 +356,8 @@ namespace LivInParis.Metro
                 connection.Open();
                 string query = @"
                     SELECT s2.Id
-                    FROM StationsMetro s1
-                    JOIN StationsMetro s2 ON s1.Ligne = s2.Ligne
+                    FROM MetroStations s1
+                    JOIN MetroStations s2 ON s1.Line = s2.Line
                     WHERE s1.Id = @StationId
                     LIMIT 5";
 
